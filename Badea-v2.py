@@ -2766,22 +2766,39 @@ def display_esg_readiness_scores(scores):
             )
         }
     )
-
 def main():
     st.set_page_config(page_title="ESG Starter's Kit", layout="wide")
     st.title("ESG Starter's Kit")
     render_header()
 
     with st.sidebar:
-        api_key = st.text_input("Enter Secret API Key:", type="password")
+        api_key = st.text_input("Enter Secret Key:", type="password")
         if not api_key:
-            st.warning("Please enter your Secret API key to continue.")
+            st.warning("Please enter your Secret key to continue.")
             return
+        
+        # Add navigation in sidebar if analyses are available
+        if 'analysis1' in st.session_state:
+            st.markdown("### View Analyses")
+            if st.button("Initial ESG Analysis"):
+                st.session_state.show_analysis = 'analysis1'
+            if 'analysis2' in st.session_state and st.button("Framework Analysis"):
+                st.session_state.show_analysis = 'analysis2'
+            if 'analysis3' in st.session_state and st.button("Framework Implementation"):
+                st.session_state.show_analysis = 'analysis3'
+            if 'management_questions' in st.session_state and st.button("Management Issues"):
+                st.session_state.show_analysis = 'management_questions'
+            if 'implementation_challenges' in st.session_state and st.button("Implementation Challenges"):
+                st.session_state.show_analysis = 'implementation_challenges'
+            if 'advisory' in st.session_state and st.button("Advisory Plan"):
+                st.session_state.show_analysis = 'advisory'
+            if 'sroi' in st.session_state and st.button("SROI Analysis"):
+                st.session_state.show_analysis = 'sroi'
 
     if 'current_step' not in st.session_state:
         st.session_state.current_step = 0
 
-    # Define all steps
+    # Define steps
     steps = [
         "Organization Profile",
         "Financial Check",
@@ -2797,6 +2814,26 @@ def main():
     current = st.session_state.current_step
     progress_text = f"Step {current + 1} of {len(steps)}: {steps[current]}"
     st.progress((current)/(len(steps)-1), text=progress_text)
+
+    # Show selected analysis if any
+    if hasattr(st.session_state, 'show_analysis'):
+        analysis_titles = {
+            'analysis1': "Initial ESG Analysis",
+            'analysis2': "Framework Analysis",
+            'analysis3': "Framework Implementation",
+            'management_questions': "Management Issues",
+            'implementation_challenges': "Implementation Challenges",
+            'advisory': "Advisory Plan",
+            'sroi': "SROI Analysis"
+        }
+        
+        with st.expander(f"View {analysis_titles[st.session_state.show_analysis]}", expanded=True):
+            st.markdown(st.session_state[st.session_state.show_analysis])
+        
+        if st.button("Continue with Assessment"):
+            delattr(st.session_state, 'show_analysis')
+            st.rerun()
+        return
 
     # Organization Profile (Step 0)
     if st.session_state.current_step == 0:
@@ -2816,21 +2853,11 @@ def main():
             
             core_activities = st.text_area("Describe your organization's core activities")
             
-            # Add ESG Readiness Assessment directly in profile step
-            st.subheader("ESG Readiness Assessment")
-            esg_responses = {}
-            for question, options in ESG_READINESS_QUESTIONS.items():
-                response = st.radio(question, options, index=None)
-                if response:
-                    esg_responses[question] = response
-            
             submit = st.form_submit_button("Continue to Financial Check")
             
             if submit:
                 if not all([full_name, mobile_number, email, organization_name, industry, core_activities]):
                     st.error("Please fill in all required fields.")
-                elif len(esg_responses) != len(ESG_READINESS_QUESTIONS):
-                    st.error("Please answer all ESG readiness questions.")
                 else:
                     st.session_state.user_data = {
                         "full_name": full_name,
@@ -2839,124 +2866,182 @@ def main():
                         "organization_name": organization_name,
                         "industry": other_industry if industry == "Others" else industry,
                         "core_activities": core_activities,
-                        "esg_responses": esg_responses,
                         "date": datetime.datetime.now().strftime('%B %d, %Y')
                     }
-                    
-                    # Calculate ESG readiness scores
-                    scores = calculate_esg_readiness_scores(esg_responses)
-                    st.session_state.esg_scores = scores
-                    
-                    with st.spinner("Analyzing ESG readiness..."):
-                        st.session_state.analysis1 = get_esg_analysis1(
-                            {**st.session_state.user_data, 'esg_scores': scores}, 
-                            api_key
-                        )
                     st.session_state.current_step = 1
                     st.rerun()
 
     # Financial Check (Step 1)
     elif st.session_state.current_step == 1:
-        st.success("✓ Profile Completed")
-        
-        # Show ESG Assessment Results in expander
-        with st.expander("View Initial ESG Assessment"):
-            tab1, tab2 = st.tabs(["ESG Scores", "Detailed Analysis"])
-            with tab1:
-                if 'esg_scores' in st.session_state:
-                    display_esg_readiness_scores(st.session_state.esg_scores)
-            with tab2:
-                st.markdown(st.session_state.analysis1)
+        show_success_states(1)
         
         st.write("## Financial Check")
         with st.form("financial_check_form"):
-            # General Information
-            st.subheader("1. General Information")
-            country = st.selectbox("Where is the company located?", COMPANY_LOCATIONS + ["Other"])
-            if country == "Other":
-                other_country = st.text_input("Specify your country")
-            
-            project_name = st.text_input("What is the name of your project/business?")
-            business_nature = st.selectbox("What is the nature of your project/business?", BUSINESS_NATURE)
-            if business_nature == "Other":
-                other_business_nature = st.text_input("Specify your business nature")
-            
-            project_objectives = st.text_area("Can you provide a brief overview of the project objectives and goals?")
-            project_cost = st.selectbox("What is the total project cost or investment required?", PROJECT_COST_RANGES)
-            financing_request = st.selectbox("How much financing are you requesting?", PROJECT_COST_RANGES)
-            start_date = st.date_input("What is your anticipated project start date?")
-            end_date = st.date_input("What is your anticipated project completion date?")
-            
-            st.markdown("---")
-            
-            # Financial Readiness
-            st.subheader("2. Financial Readiness")
-            self_funding = st.selectbox("What percentage of the project cost will be self-funded?", SELF_FUNDING_RANGES)
-            financial_projection = st.radio("Do you have a detailed financial projection?", FINANCIAL_PROJECTION)
-            expected_revenue = st.selectbox("What is your expected revenue stream?", REVENUE_RANGES)
-            break_even = st.selectbox("When do you expect to break even?", BREAK_EVEN_PERIODS)
-            other_debts = st.radio("Are there any other debts or loans currently?", ["Yes", "No"])
-            contingency_plan = st.radio("Do you have a contingency plan for cost overruns?", ["Yes", "No"])
-            
-            st.markdown("---")
-            
-            # Market and Operations
-            st.subheader("3. Market and Operations")
-            target_market = st.selectbox("What is your target market?", ["Local", "Regional", "Global"])
-            market_demand = st.selectbox("How would you characterize market demand?", ["High", "Medium", "Low"])
-            competitors = st.text_area("Who are your key competitors?")
-            market_study = st.radio("Have you conducted a market study?", ["Yes", "No"])
-            
-            # Submit button
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "General Information", 
+                "Financial Readiness",
+                "Market & Operations",
+                "Impact Assessment"
+            ])
+
+            with tab1:
+                st.subheader("1. General Information")
+                country = st.selectbox("Where is the company located? *", COMPANY_LOCATIONS)
+                project_name = st.text_input("Project/Business Name *")
+                business_nature = st.selectbox("Nature of Business *", BUSINESS_NATURE)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    project_cost = st.selectbox("Total Project Cost *", PROJECT_COST_RANGES)
+                    financing_request = st.selectbox("Financing Request Amount *", PROJECT_COST_RANGES)
+                with col2:
+                    start_date = st.date_input("Project Start Date *")
+                    end_date = st.date_input("Project End Date *")
+                
+                project_objectives = st.text_area("Project Objectives and Goals *")
+
+            with tab2:
+                st.subheader("2. Financial Readiness")
+                col1, col2 = st.columns(2)
+                with col1:
+                    self_funding = st.selectbox("Self-funding Percentage *", SELF_FUNDING_RANGES)
+                    financial_projection = st.radio("Financial Projection Available *", FINANCIAL_PROJECTION)
+                with col2:
+                    expected_revenue = st.selectbox("Expected Revenue *", REVENUE_RANGES)
+                    break_even = st.selectbox("Break-even Period *", BREAK_EVEN_PERIODS)
+                
+                col3, col4 = st.columns(2)
+                with col3:
+                    other_debts = st.radio("Other Debts/Loans *", ["Yes", "No"])
+                with col4:
+                    contingency_plan = st.radio("Cost Overrun Contingency Plan *", ["Yes", "No"])
+
+            with tab3:
+                st.subheader("3. Market & Operations")
+                col1, col2 = st.columns(2)
+                with col1:
+                    target_market = st.selectbox("Target Market *", ["Local", "Regional", "Global"])
+                    market_demand = st.selectbox("Market Demand *", ["High", "Medium", "Low"])
+                with col2:
+                    market_study = st.radio("Market Study Conducted *", ["Yes", "No"])
+                    existing_contracts = st.radio("Existing Customers/Contracts *", ["Yes", "No"])
+                
+                competitors = st.text_area("Key Competitors and Market Position *")
+
+            with tab4:
+                st.subheader("4. Impact Assessment")
+                job_creation = st.selectbox("Job Creation Potential *", JOB_CREATION_RANGES)
+                community_benefit = st.selectbox("Community Benefit Percentage *", COMMUNITY_BENEFIT_RANGES)
+                local_economy = st.multiselect("Local Economy Impact *", LOCAL_ECONOMY_IMPACTS)
+                sdg_alignment = st.multiselect("SDG Alignment *", SDG_OPTIONS)
+
+            st.markdown("*Required fields are marked with an asterisk (*)")
             submit = st.form_submit_button("Continue to ESG Assessment")
             
             if submit:
-                financial_data = {
-                    "country": other_country if country == "Other" else country,
-                    "project_name": project_name,
-                    "business_nature": other_business_nature if business_nature == "Other" else business_nature,
-                    "project_objectives": project_objectives,
-                    "project_cost": project_cost,
-                    "financing_request": financing_request,
-                    "start_date": str(start_date),
-                    "end_date": str(end_date),
-                    "self_funding": self_funding,
-                    "financial_projection": financial_projection,
-                    "expected_revenue": expected_revenue,
-                    "break_even": break_even,
-                    "other_debts": other_debts,
-                    "contingency_plan": contingency_plan,
-                    "target_market": target_market,
-                    "market_demand": market_demand,
-                    "competitors": competitors,
-                    "market_study": market_study
+                # Validate all required fields
+                required_fields = {
+                    "Country": country,
+                    "Project Name": project_name,
+                    "Business Nature": business_nature,
+                    "Project Cost": project_cost,
+                    "Financing Request": financing_request,
+                    "Start Date": start_date,
+                    "End Date": end_date,
+                    "Project Objectives": project_objectives,
+                    "Self Funding": self_funding,
+                    "Financial Projection": financial_projection,
+                    "Expected Revenue": expected_revenue,
+                    "Break Even": break_even,
+                    "Other Debts": other_debts,
+                    "Contingency Plan": contingency_plan,
+                    "Target Market": target_market,
+                    "Market Demand": market_demand,
+                    "Market Study": market_study,
+                    "Existing Contracts": existing_contracts,
+                    "Competitors": competitors,
+                    "Job Creation": job_creation,
+                    "Community Benefit": community_benefit
                 }
-                st.session_state.financial_check_responses = financial_data
-                st.session_state.current_step = 2
-                st.rerun()
+                
+                # Check for empty fields
+                empty_fields = [field for field, value in required_fields.items() 
+                                if not value or value == "" or 
+                                (isinstance(value, str) and value.strip() == "")]
+                
+                # Check for empty multiselect fields
+                if not local_economy:
+                    empty_fields.append("Local Economy Impact")
+                if not sdg_alignment:
+                    empty_fields.append("SDG Alignment")
+                
+                if empty_fields:
+                    st.error(f"Please fill in all required fields: {', '.join(empty_fields)}")
+                else:
+                    # Store the financial data
+                    financial_data = {
+                        "country": country,
+                        "project_name": project_name,
+                        "business_nature": business_nature,
+                        "project_objectives": project_objectives,
+                        "project_cost": project_cost,
+                        "financing_request": financing_request,
+                        "start_date": str(start_date),
+                        "end_date": str(end_date),
+                        "self_funding": self_funding,
+                        "financial_projection": financial_projection,
+                        "expected_revenue": expected_revenue,
+                        "break_even": break_even,
+                        "other_debts": other_debts,
+                        "contingency_plan": contingency_plan,
+                        "target_market": target_market,
+                        "market_demand": market_demand,
+                        "market_study": market_study,
+                        "existing_contracts": existing_contracts,
+                        "competitors": competitors,
+                        "job_creation": job_creation,
+                        "community_benefit": community_benefit,
+                        "local_economy": local_economy,
+                        "sdg_alignment": sdg_alignment
+                    }
+                    st.session_state.financial_check_responses = financial_data
+                    st.session_state.current_step = 2
+                    st.rerun()
 
     # ESG Assessment (Step 2)
     elif st.session_state.current_step == 2:
-        st.success("✓ Profile Completed")
-        st.success("✓ Financial Check Completed")
+        show_success_states(2)
         
-        with st.expander("View Financial Overview"):
-            col1, col2, col3 = st.columns(3)
+        with st.expander("View Financial Overview", expanded=False):
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Project Cost", st.session_state.financial_check_responses['project_cost'])
             with col2:
                 st.metric("Self Funding", st.session_state.financial_check_responses['self_funding'])
             with col3:
                 st.metric("Expected Revenue", st.session_state.financial_check_responses['expected_revenue'])
+            with col4:
+                st.metric("Break Even", st.session_state.financial_check_responses['break_even'])
         
         st.write("## ESG Assessment")
         with st.form("esg_form"):
             st.subheader("ESG Readiness Assessment")
             esg_responses = {}
-            for question, options in ESG_READINESS_QUESTIONS.items():
-                response = st.radio(question, options, index=None)
-                if response:
-                    esg_responses[question] = response
+            
+            categories = {
+                "Strategic Readiness": list(ESG_READINESS_QUESTIONS.items())[:3],
+                "Understanding & Measurement": list(ESG_READINESS_QUESTIONS.items())[3:6],
+                "Implementation & Reporting": list(ESG_READINESS_QUESTIONS.items())[6:8],
+                "Social & Governance": list(ESG_READINESS_QUESTIONS.items())[8:]
+            }
+            
+            for category, questions in categories.items():
+                st.write(f"### {category}")
+                for question, options in questions:
+                    response = st.radio(question, options, index=None)
+                    if response:
+                        esg_responses[question] = response
+                st.markdown("---")
             
             submit = st.form_submit_button("Continue to Framework Selection")
             
@@ -2968,52 +3053,21 @@ def main():
                     scores = calculate_esg_readiness_scores(esg_responses)
                     st.session_state.esg_scores = scores
                     
-                    with st.spinner("Analyzing ESG assessment..."):
-                        st.session_state.analysis2 = get_esg_analysis2(
-                            {**st.session_state.user_data, **st.session_state.financial_check_responses},
-                            api_key
-                        )
-                        st.session_state.analysis3 = get_esg_analysis3(
-                            {**st.session_state.user_data, **st.session_state.financial_check_responses},
+                    with st.spinner("Analyzing ESG readiness..."):
+                        st.session_state.analysis1 = get_esg_analysis1(
+                            {**st.session_state.user_data, 'esg_scores': scores}, 
                             api_key
                         )
                     st.session_state.current_step = 3
                     st.rerun()
 
     # Framework Selection (Step 3)
-    # Framework Selection (Step 3)
     elif st.session_state.current_step == 3:
         show_success_states(3)
         
         # Show ESG scores visualization
         st.write("### ESG Assessment Results")
-        scores = st.session_state.esg_scores
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Overall Score", f"{scores['overall_score']:.2f}/5.0")
-        with col2:
-            st.metric("Readiness Level", scores['readiness_level'])
-        with col3:
-            st.metric("ESG Maturity", f"{(scores['overall_score'] / 5) * 100:.1f}%")
-        
-        # Category Scores Chart
-        st.write("### Category Performance")
-        chart_data = pd.DataFrame({
-            'Category': list(scores['category_scores'].keys()),
-            'Score': list(scores['category_scores'].values())
-        })
-        
-        chart = alt.Chart(chart_data).mark_bar().encode(
-            x=alt.X('Category:N', title='Categories'),
-            y=alt.Y('Score:Q', scale=alt.Scale(domain=[0, 5]), title='Score (1-5)'),
-            color=alt.value('#1F77B4')
-        ).properties(
-            title='Category Assessment Scores',
-            height=300
-        )
-        
-        st.altair_chart(chart, use_container_width=True)
+        display_esg_readiness_scores(st.session_state.esg_scores)
         
         st.write("## Framework Selection")
         st.write("Select applicable frameworks based on your organization type:")
@@ -3098,9 +3152,10 @@ def main():
     # Advisory Plan (Step 6)
     elif st.session_state.current_step == 6:
         show_success_states(6)
-        st.write("## Advisory Plan")
         
-        with st.spinner("Generating advisory plan..."):
+        st.write("## Advisory Plan and SROI Analysis")
+        with st.spinner("Generating advisory plan and SROI analysis..."):
+# Advisory Plan (Step 6) continued...
             all_analyses = {
                 'analysis1': st.session_state.analysis1,
                 'analysis2': st.session_state.analysis2,
@@ -3110,33 +3165,43 @@ def main():
                 'esg_scores': st.session_state.esg_scores
             }
             
+            # Generate advisory plan
             st.session_state.advisory = generate_advisory_analysis(
                 st.session_state.user_data,
                 all_analyses,
                 api_key
             )
+            
+            # Generate SROI analysis
             st.session_state.sroi = generate_sroi_analysis(
                 st.session_state.user_data,
                 all_analyses,
                 api_key
             )
+            
+            # Generate executive summary
             st.session_state.summary = generate_summary(
                 st.session_state.user_data,
                 all_analyses,
                 api_key
             )
             
-            # Show Advisory Plan and SROI Analysis
-            st.markdown("### Advisory Plan")
-            st.markdown(st.session_state.advisory)
+            # Display results in tabs
+            tab1, tab2, tab3 = st.tabs(["Advisory Plan", "SROI Analysis", "Executive Summary"])
             
-            st.markdown("### SROI Analysis")
-            st.markdown(st.session_state.sroi)
+            with tab1:
+                st.markdown("### Advisory Plan")
+                st.markdown(st.session_state.advisory)
             
-            st.markdown("### Executive Summary")
-            st.markdown(st.session_state.summary)
+            with tab2:
+                st.markdown("### SROI Analysis")
+                st.markdown(st.session_state.sroi)
+            
+            with tab3:
+                st.markdown("### Executive Summary")
+                st.markdown(st.session_state.summary)
         
-        if st.button("Generate Final Report"):
+        if st.button("Proceed to Report Generation"):
             st.session_state.current_step = 7
             st.rerun()
 
@@ -3145,200 +3210,194 @@ def main():
         show_success_states(7)
         st.write("## Final Report Generation")
         
-        # Review sections
-        sections = {
-            "Organization Profile": {
-                "key": "user_data",
-                "fields": {
-                    "Organization Name": "organization_name",
-                    "Industry": "industry",
-                    "Core Activities": "core_activities",
-                    "Full Name": "full_name",
-                    "Email": "email",
-                    "Mobile Number": "mobile_number"
-                },
-                "analysis_key": "analysis1"
-            },
-            "Financial Check": {
-                "key": "financial_check_responses",
-                "fields": {
-                    "Project Cost": "project_cost",
-                    "Self Funding": "self_funding",
-                    "Expected Revenue": "expected_revenue",
-                    "Break Even": "break_even"
-                }
-            },
-            "ESG Assessment": {
-                "key": "esg_scores",
-                "fields": {
-                    "Overall Score": "overall_score",
-                    "Readiness Level": "readiness_level"
-                },
-                "analysis_key": ["analysis2", "analysis3"]
-            },
-            "Framework Selection": {
-                "key": "user_data",
-                "fields": {
-                    "Selected Frameworks": "organization_types"
-                },
-                "analysis_key": "analysis4"
-            },
-            "Management Issues": {
-                "analysis_key": "management_questions"
-            },
-            "Implementation Challenges": {
-                "analysis_key": "implementation_challenges"
-            },
-            "Advisory Plan": {
-                "analysis_key": "advisory"
-            },
-            "SROI Analysis": {
-                "analysis_key": "sroi"
+        # Create tabs for reviewing different sections
+        tab1, tab2, tab3 = st.tabs(["Review Analysis", "Preview Reports", "Generate & Send"])
+        
+        with tab1:
+            st.write("### Review All Analyses")
+            
+            analyses = {
+                "Initial ESG Analysis": "analysis1",
+                "Framework Analysis": "analysis2",
+                "Framework Implementation": "analysis3",
+                "Management Issues": "management_questions",
+                "Implementation Challenges": "implementation_challenges",
+                "Advisory Plan": "advisory",
+                "SROI Analysis": "sroi",
+                "Executive Summary": "summary"
             }
-        }
-
-        for title, config in sections.items():
-            with st.expander(f"Review {title}", expanded=False):
-                if "fields" in config and config["fields"]:
-                    st.subheader("Details")
-                    for label, key in config["fields"].items():
-                        if isinstance(key, list):
-                            value = get_nested_value(st.session_state.get(config["key"], {}), key)
-                        else:
-                            value = st.session_state.get(config["key"], {}).get(key, "N/A")
-                        st.write(f"**{label}:** {value}")
-                
-                if "analysis_key" in config:
-                    st.subheader("Analysis")
-                    if isinstance(config["analysis_key"], list):
-                        for key in config["analysis_key"]:
-                            analysis_content = st.session_state.get(key, "No analysis available.")
-                            st.markdown(analysis_content)
+            
+            for title, key in analyses.items():
+                with st.expander(title, expanded=False):
+                    if key in st.session_state:
+                        st.markdown(st.session_state[key])
                     else:
-                        analysis_content = st.session_state.get(config["analysis_key"], "No analysis available.")
-                        st.markdown(analysis_content)
+                        st.warning(f"{title} not yet generated")
+        
+        with tab2:
+            st.write("### Preview Report Sections")
+            
+            # Show organization profile
+            with st.expander("Organization Profile", expanded=False):
+                st.json(st.session_state.user_data)
+            
+            # Show financial check responses
+            with st.expander("Financial Check", expanded=False):
+                st.json(st.session_state.financial_check_responses)
+            
+            # Show ESG scores
+            with st.expander("ESG Assessment Scores", expanded=False):
+                display_esg_readiness_scores(st.session_state.esg_scores)
+        
+        with tab3:
+            st.write("### Generate and Send Reports")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("#### Report Recipients")
+                additional_email = st.text_input(
+                    "Additional Email Recipients (comma-separated)",
+                    help="Leave empty to send only to primary contact"
+                )
+            
+            with col2:
+                st.write("#### Report Options")
+                include_summary = st.checkbox("Include Executive Summary", value=True)
+                include_detailed = st.checkbox("Include Detailed Report", value=True)
+                include_excel = st.checkbox("Include Excel Data", value=True)
 
-        if st.button("📄 Generate and Email Report", type="primary"):
-            try:
-                with st.spinner("Generating and sending report..."):
-                    # Prepare data
-                    esg_data = {
-                        'analysis1': st.session_state.analysis1,
-                        'analysis2': st.session_state.analysis2,
-                        'analysis3': st.session_state.analysis3,
-                        'management_questions': st.session_state.management_questions,
-                        'implementation_challenges': st.session_state.implementation_challenges,
-                        'advisory': st.session_state.advisory,
-                        'sroi': st.session_state.sroi
-                    }
-                    
-                    summary_data = {
-                        'analysis1': st.session_state.analysis1,
-                        'esg_scores': st.session_state.esg_scores,
-                        'summary': st.session_state.summary
-                    }
-                    
-                    personal_info = {
-                        'name': st.session_state.user_data['organization_name'],
-                        'industry': st.session_state.user_data['industry'],
-                        'full_name': st.session_state.user_data['full_name'],
-                        'mobile_number': st.session_state.user_data['mobile_number'],
-                        'email': st.session_state.user_data['email'],
-                        'date': st.session_state.user_data['date']
-                    }
-                    
-                    # Generate reports
-                    pdf_buffer = generate_pdf(esg_data, personal_info, [4, 7, 11, 15, 18, 21])
-                    pdf_buffer2 = generate_pdf_summary(summary_data, personal_info, [6, 7, 8, 11, 13, 15])
-                    excel_buffer = generate_excel_report(st.session_state.user_data)
-                    
-                    # Prepare email attachments
-                    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-                    attachments = [
-                        (pdf_buffer, f"esg_assessment_{timestamp}.pdf", "application/pdf"),
-                        (pdf_buffer2, f"esg_starterkit_{timestamp}.pdf", "application/pdf"),
-                        (excel_buffer, f"esg_input_data_{timestamp}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    ]
-                    
-                    # Send email to user
-                    email_sent = send_email_with_attachments(
-                        receiver_email=personal_info['email'],
-                        organization_name=personal_info['name'],
-                        subject="ESG Assessment Report",
-                        body=f"""Dear {personal_info['full_name']},
+            if st.button("📄 Generate and Email Reports", type="primary"):
+                try:
+                    with st.spinner("Generating and sending reports..."):
+                        # Prepare data
+                        esg_data = {
+                            'analysis1': st.session_state.analysis1,
+                            'analysis2': st.session_state.analysis2,
+                            'analysis3': st.session_state.analysis3,
+                            'management_questions': st.session_state.management_questions,
+                            'implementation_challenges': st.session_state.implementation_challenges,
+                            'advisory': st.session_state.advisory,
+                            'sroi': st.session_state.sroi
+                        }
+                        
+                        summary_data = {
+                            'analysis1': st.session_state.analysis1,
+                            'esg_scores': st.session_state.esg_scores,
+                            'summary': st.session_state.summary
+                        }
+                        
+                        personal_info = {
+                            'name': st.session_state.user_data['organization_name'],
+                            'industry': st.session_state.user_data['industry'],
+                            'full_name': st.session_state.user_data['full_name'],
+                            'mobile_number': st.session_state.user_data['mobile_number'],
+                            'email': st.session_state.user_data['email'],
+                            'date': st.session_state.user_data['date']
+                        }
+                        
+                        # Generate reports based on selected options
+                        attachments = []
+                        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M')
+                        
+                        if include_detailed:
+                            pdf_buffer = generate_pdf(esg_data, personal_info, [4, 7, 11, 15, 18, 21])
+                            attachments.append((pdf_buffer, f"esg_assessment_{timestamp}.pdf", "application/pdf"))
+                        
+                        if include_summary:
+                            pdf_buffer2 = generate_pdf_summary(summary_data, personal_info, [6, 7, 8, 11, 13, 15])
+                            attachments.append((pdf_buffer2, f"esg_starterkit_{timestamp}.pdf", "application/pdf"))
+                        
+                        if include_excel:
+                            excel_buffer = generate_excel_report(st.session_state.user_data)
+                            attachments.append((excel_buffer, f"esg_input_data_{timestamp}.xlsx", 
+                                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                        
+                        # Send email to primary recipient
+                        email_sent = send_email_with_attachments(
+                            receiver_email=personal_info['email'],
+                            organization_name=personal_info['name'],
+                            subject="ESG Assessment Report",
+                            body=f"""Dear {personal_info['full_name']},
 
-Thank you for using our ESG Assessment service. Please find attached your complete ESG Assessment Report and input data for {personal_info['name']}.
+Thank you for using our ESG Assessment service. Please find attached your ESG Assessment Report package for {personal_info['name']}.
 
 Report Generation Date: {personal_info['date']}
 
 Best regards,
 ESG Assessment Team""",
-                        attachments=attachments
-                    )
-                    
-                    # Send copy to admin
-                    admin_email_sent = send_email_with_attachments(
-                        receiver_email=EMAIL_SENDER,
-                        organization_name=personal_info['name'],
-                        subject="ESG Assessment Report Copy",
-                        body=f"""New ESG Assessment Completed
-
-Organization: {personal_info['name']}
-Industry: {personal_info['industry']}
-Contact: {personal_info['full_name']} ({personal_info['email']})
-Date: {personal_info['date']}
-
--- System Generated --""",
-                        attachments=attachments
-                    )
-                    
-                    if email_sent and admin_email_sent:
-                        st.success("Reports generated and sent successfully!")
-                    else:
-                        st.warning("Email sending failed. You can download the reports below.")
-                    
-                    # Provide download buttons
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.download_button(
-                            "📥 Download Full Assessment",
-                            data=pdf_buffer,
-                            file_name=f"esg_assessment_{timestamp}.pdf",
-                            mime="application/pdf"
+                            attachments=attachments
                         )
-                    with col2:
-                        st.download_button(
-                            "📥 Download Summary Report",
-                            data=pdf_buffer2,
-                            file_name=f"esg_starterkit_{timestamp}.pdf",
-                            mime="application/pdf"
-                        )
-                    with col3:
-                        st.download_button(
-                            "📥 Download Input Data",
-                            data=excel_buffer,
-                            file_name=f"esg_input_data_{timestamp}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    
-            except Exception as e:
-                st.error(f"Error generating and sending reports: {str(e)}")
-                logging.error(f"Detailed error: {str(e)}", exc_info=True)
+                        
+                        # Send to additional recipients if specified
+                        if additional_email:
+                            additional_emails = [email.strip() for email in additional_email.split(',')]
+                            for email in additional_emails:
+                                send_email_with_attachments(
+                                    receiver_email=email,
+                                    organization_name=personal_info['name'],
+                                    subject="ESG Assessment Report",
+                                    body=f"""ESG Assessment Report for {personal_info['name']}
 
+Report Generation Date: {personal_info['date']}
+
+Best regards,
+ESG Assessment Team""",
+                                    attachments=attachments
+                                )
+                        
+                        if email_sent:
+                            st.success("Reports generated and sent successfully!")
+                            
+                            # Provide download buttons
+                            st.write("### Download Reports")
+                            cols = st.columns(len(attachments))
+                            for i, (buffer, filename, mime_type) in enumerate(attachments):
+                                with cols[i]:
+                                    st.download_button(
+                                        f"📥 Download {filename.split('_')[0].title()}",
+                                        data=buffer,
+                                        file_name=filename,
+                                        mime=mime_type
+                                    )
+                        else:
+                            st.error("Failed to send emails. Please try again or contact support.")
+                            
+                except Exception as e:
+                    st.error(f"Error generating and sending reports: {str(e)}")
+                    logging.error(f"Detailed error: {str(e)}", exc_info=True)
 def show_success_states(current_step):
-    """Helper function to show success states for completed steps"""
-    steps_completed = [
-        "Profile",
-        "Financial Check",
-        "ESG Assessment",
-        "Framework Selection",
-        "Management Issues",
-        "Implementation Challenges",
-        "Advisory Plan"
-    ]
-    for i, step in enumerate(steps_completed):
-        if i < current_step:
-            st.success(f"✓ {step} Completed")
-
+    """
+    Display success messages for completed steps
+    
+    Args:
+        current_step (int): The current step number in the process
+    """
+    # Map of steps to their success messages
+    step_messages = {
+        1: "Profile Completed",
+        2: "Profile and Financial Check Completed",
+        3: "Profile, Financial Check, and ESG Assessment Completed",
+        4: "Profile, Financial Check, ESG Assessment, and Framework Selection Completed",
+        5: "Profile, Financial Check, ESG Assessment, Framework Selection, and Management Issues Completed",
+        6: "Profile, Financial Check, ESG Assessment, Framework Selection, Management Issues, and Implementation Challenges Completed",
+        7: "All Previous Steps Completed"
+    }
+    
+    # Display success messages for completed steps
+    for step in range(1, current_step + 1):
+        if step in step_messages:
+            message = step_messages[step]
+            
+            # Create columns for better visual organization
+            if step == current_step:
+                # For the current step, show the message more prominently
+                st.success(message)
+            else:
+                # For previous steps, show in a more compact format
+                st.success(f"Step {step} Completed")
+    
+    # Add a separator after success messages
+    if current_step > 0:
+        st.markdown("---")
 if __name__ == "__main__":
     main()
