@@ -3269,21 +3269,23 @@ def main():
             if st.button("📄 Generate and Email Reports", type="primary"):
                 try:
                     with st.spinner("Generating and sending reports..."):
+                        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M')
+                        
                         # Prepare data
                         esg_data = {
-                            'analysis1': st.session_state.analysis1,
-                            'analysis2': st.session_state.analysis2,
-                            'analysis3': st.session_state.analysis3,
-                            'management_questions': st.session_state.management_questions,
-                            'implementation_challenges': st.session_state.implementation_challenges,
-                            'advisory': st.session_state.advisory,
-                            'sroi': st.session_state.sroi
+                            'analysis1': clean_text(st.session_state.analysis1),
+                            'analysis2': clean_text(st.session_state.analysis2),
+                            'analysis3': clean_text(st.session_state.analysis3),
+                            'management_questions': clean_text(st.session_state.management_questions),
+                            'implementation_challenges': clean_text(st.session_state.implementation_challenges),
+                            'advisory': clean_text(st.session_state.advisory),
+                            'sroi': clean_text(st.session_state.sroi)
                         }
                         
                         summary_data = {
-                            'analysis1': st.session_state.analysis1,
+                            'analysis1': clean_text(st.session_state.analysis1),
                             'esg_scores': st.session_state.esg_scores,
-                            'summary': st.session_state.summary
+                            'summary': clean_text(st.session_state.summary)
                         }
                         
                         personal_info = {
@@ -3295,76 +3297,147 @@ def main():
                             'date': st.session_state.user_data['date']
                         }
                         
-                        # Generate reports based on selected options
-                        attachments = []
-                        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M')
+                        # Initialize empty list for attachments
+                        report_files = []
                         
+                        # Generate reports and store in memory
                         if include_detailed:
-                            pdf_buffer = generate_pdf(esg_data, personal_info, [4, 7, 11, 15, 18, 21])
-                            attachments.append((pdf_buffer, f"esg_assessment_{timestamp}.pdf", "application/pdf"))
+                            try:
+                                pdf_buffer = generate_pdf(esg_data, personal_info, [4, 7, 11, 15, 18, 21])
+                                if pdf_buffer:
+                                    report_files.append({
+                                        'buffer': pdf_buffer,
+                                        'filename': f"esg_assessment_{timestamp}.pdf",
+                                        'mime_type': "application/pdf"
+                                    })
+                            except Exception as e:
+                                st.error(f"Error generating detailed report: {str(e)}")
+                                logging.error(f"Detailed report generation error: {str(e)}", exc_info=True)
                         
                         if include_summary:
-                            pdf_buffer2 = generate_pdf_summary(summary_data, personal_info, [6, 7, 8, 11, 13, 15])
-                            attachments.append((pdf_buffer2, f"esg_starterkit_{timestamp}.pdf", "application/pdf"))
+                            try:
+                                pdf_buffer2 = generate_pdf_summary(summary_data, personal_info, [6, 7, 8, 11, 13, 15])
+                                if pdf_buffer2:
+                                    report_files.append({
+                                        'buffer': pdf_buffer2,
+                                        'filename': f"esg_starterkit_{timestamp}.pdf",
+                                        'mime_type': "application/pdf"
+                                    })
+                            except Exception as e:
+                                st.error(f"Error generating summary report: {str(e)}")
+                                logging.error(f"Summary report generation error: {str(e)}", exc_info=True)
                         
                         if include_excel:
-                            excel_buffer = generate_excel_report(st.session_state.user_data)
-                            attachments.append((excel_buffer, f"esg_input_data_{timestamp}.xlsx", 
-                                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                        
-                        # Send email to primary recipient
-                        email_sent = send_email_with_attachments(
-                            receiver_email=personal_info['email'],
-                            organization_name=personal_info['name'],
-                            subject="ESG Assessment Report",
-                            body=f"""Dear {personal_info['full_name']},
+                            try:
+                                excel_buffer = generate_excel_report(st.session_state.user_data)
+                                if excel_buffer:
+                                    report_files.append({
+                                        'buffer': excel_buffer,
+                                        'filename': f"esg_input_data_{timestamp}.xlsx",
+                                        'mime_type': "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    })
+                            except Exception as e:
+                                st.error(f"Error generating Excel report: {str(e)}")
+                                logging.error(f"Excel report generation error: {str(e)}", exc_info=True)
+
+                        if not report_files:
+                            st.error("No reports were generated successfully.")
+                            return
+
+                        # Prepare email attachments
+                        attachments = [
+                            (report['buffer'], report['filename'], report['mime_type'])
+                            for report in report_files
+                        ]
+
+                        # Send email to primary recipient and BADEA
+                        email_body = f"""Dear {personal_info['full_name']},
 
 Thank you for using our ESG Assessment service. Please find attached your ESG Assessment Report package for {personal_info['name']}.
 
 Report Generation Date: {personal_info['date']}
 
 Best regards,
-ESG Assessment Team""",
-                            attachments=attachments
-                        )
-                        
-                        # Send to additional recipients if specified
-                        if additional_email:
-                            additional_emails = [email.strip() for email in additional_email.split(',')]
-                            for email in additional_emails:
-                                send_email_with_attachments(
-                                    receiver_email=email,
-                                    organization_name=personal_info['name'],
-                                    subject="ESG Assessment Report",
-                                    body=f"""ESG Assessment Report for {personal_info['name']}
+ESG Assessment Team"""
 
-Report Generation Date: {personal_info['date']}
+                        try:
+                            # Send to primary recipient
+                            email_sent = send_email_with_attachments(
+                                receiver_email=personal_info['email'],
+                                organization_name=personal_info['name'],
+                                subject="ESG Assessment Report",
+                                body=email_body,
+                                attachments=attachments
+                            )
 
-Best regards,
-ESG Assessment Team""",
-                                    attachments=attachments
-                                )
-                        
-                        if email_sent:
-                            st.success("Reports generated and sent successfully!")
+                            # Always send a copy to BADEA
+                            badea_sent = send_email_with_attachments(
+                                receiver_email="badea@ceaiglobal.com",
+                                organization_name=personal_info['name'],
+                                subject=f"ESG Assessment Report Copy - {personal_info['name']}",
+                                body=f"""ESG Assessment Report Copy
+
+Organization: {personal_info['name']}
+Contact Person: {personal_info['full_name']}
+Email: {personal_info['email']}
+Date: {personal_info['date']}
+
+-- System Generated --""",
+                                attachments=attachments
+                            )
+
+                            if email_sent and badea_sent:
+                                st.success("Reports sent successfully!")
+                                
+                                # Send to additional recipients if specified
+                                if additional_email:
+                                    additional_emails = [email.strip() for email in additional_email.split(',')]
+                                    for email in additional_emails:
+                                        try:
+                                            send_email_with_attachments(
+                                                receiver_email=email,
+                                                organization_name=personal_info['name'],
+                                                subject=f"ESG Assessment Report - {personal_info['name']}",
+                                                body=email_body,
+                                                attachments=attachments
+                                            )
+                                            st.success(f"Reports sent successfully to {email}")
+                                        except Exception as e:
+                                            st.error(f"Failed to send email to {email}: {str(e)}")
+                                
+                                # Provide download buttons
+                                st.write("### Download Reports")
+                                cols = st.columns(len(report_files))
+                                for i, report in enumerate(report_files):
+                                    with cols[i]:
+                                        st.download_button(
+                                            f"📥 Download {report['filename'].split('_')[0].title()}",
+                                            data=report['buffer'],
+                                            file_name=report['filename'],
+                                            mime=report['mime_type']
+                                        )
+                            else:
+                                st.error("Failed to send emails. Please try downloading the reports instead.")
+                                
+                        except Exception as e:
+                            st.error(f"Error sending email: {str(e)}")
+                            logging.error(f"Email sending error: {str(e)}", exc_info=True)
                             
-                            # Provide download buttons
+                            # Still provide download buttons if email fails
                             st.write("### Download Reports")
-                            cols = st.columns(len(attachments))
-                            for i, (buffer, filename, mime_type) in enumerate(attachments):
+                            cols = st.columns(len(report_files))
+                            for i, report in enumerate(report_files):
                                 with cols[i]:
                                     st.download_button(
-                                        f"📥 Download {filename.split('_')[0].title()}",
-                                        data=buffer,
-                                        file_name=filename,
-                                        mime=mime_type
+                                        f"📥 Download {report['filename'].split('_')[0].title()}",
+                                        data=report['buffer'],
+                                        file_name=report['filename'],
+                                        mime=report['mime_type']
                                     )
-                        else:
-                            st.error("Failed to send emails. Please try again or contact support.")
-                            
+                                    
                 except Exception as e:
-                    st.error(f"Error generating and sending reports: {str(e)}")
-                    logging.error(f"Detailed error: {str(e)}", exc_info=True)
+                    st.error(f"Error in report generation process: {str(e)}")
+                    logging.error(f"General report generation error: {str(e)}", exc_info=True)
 def show_success_states(current_step):
     """
     Display success messages for completed steps
