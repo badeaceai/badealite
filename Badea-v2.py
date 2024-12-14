@@ -3273,19 +3273,19 @@ def main():
                         
                         # Prepare data
                         esg_data = {
-                            'analysis1': clean_text(st.session_state.analysis1),
-                            'analysis2': clean_text(st.session_state.analysis2),
-                            'analysis3': clean_text(st.session_state.analysis3),
-                            'management_questions': clean_text(st.session_state.management_questions),
-                            'implementation_challenges': clean_text(st.session_state.implementation_challenges),
-                            'advisory': clean_text(st.session_state.advisory),
-                            'sroi': clean_text(st.session_state.sroi)
+                            'analysis1': st.session_state.analysis1,
+                            'analysis2': st.session_state.analysis2,
+                            'analysis3': st.session_state.analysis3,
+                            'management_questions': st.session_state.management_questions,
+                            'implementation_challenges': st.session_state.implementation_challenges,
+                            'advisory': st.session_state.advisory,
+                            'sroi': st.session_state.sroi
                         }
                         
                         summary_data = {
-                            'analysis1': clean_text(st.session_state.analysis1),
+                            'analysis1':  st.session_state.analysis1,
                             'esg_scores': st.session_state.esg_scores,
-                            'summary': clean_text(st.session_state.summary)
+                            'summary': st.session_state.summary
                         }
                         
                         personal_info = {
