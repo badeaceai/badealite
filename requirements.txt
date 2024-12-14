@@ -5,8 +5,4 @@ reportlab
 altair
 xlsxwriter
 Pillow
-datetime
-uuid
 python-dateutil
-logging
-ssl
