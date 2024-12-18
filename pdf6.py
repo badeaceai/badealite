@@ -38,42 +38,6 @@ def download_and_register_fonts():
         except Exception as e:
             st.error(f"Error loading font {font_name}: {str(e)}")
 
-
-
-
-
-
-def process_content_section(section: str, styles: Dict) -> List[Any]:
-    """Process content sections with consistent table handling"""
-    elements = []
-    content_text = section.strip()
-    
-    # Check for table content
-    if '|' in content_text and content_text.count('\n') > 1:
-        try:
-            # Process table
-            table_data = process_table_content(content_text, styles)
-            if table_data:
-                elements.append(Spacer(1, 12))
-                table = create_formatted_table(table_data, styles)
-                if table:
-                    elements.append(table)
-                elements.append(Spacer(1, 12))
-            else:
-                elements.append(Paragraph(unescape(content_text), styles['content']))
-        except Exception as e:
-            st.error(f"Error processing table: {str(e)}")
-            elements.append(Paragraph(unescape(content_text), styles['content']))
-    else:
-        # Handle non-table content
-        paragraphs = [p.strip() for p in content_text.split('\n') if p.strip()]
-        for para in paragraphs:
-            para = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', para)
-            elements.append(Paragraph(unescape(para), styles['content']))
-            elements.append(Spacer(1, 8))
-    
-    return elements
-
 def create_styles() -> Dict[str, ParagraphStyle]:
     """Create styles using reliable system fonts for Streamlit cloud environment"""
     styles = {
@@ -260,42 +224,40 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         return b''
     finally:
         buffer.close()
-
 def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
-    """Process table content with standard fonts"""
+    """Process table content with consistent two-column format"""
     table_data = []
     try:
+        # Add table headers
+        headers = ['Trend', 'Observation']
+        table_data.append([
+            Paragraph(headers[0], styles['subheading']),
+            Paragraph(headers[1], styles['subheading'])
+        ])
+        
         # Split into lines and clean up
         lines = [line.strip() for line in content_text.split('\n') if line.strip()]
         
-        # Process only table lines
-        table_lines = []
+        current_trend = None
+        current_observation = None
+        
         for line in lines:
-            if '|' not in line or line.startswith('|-'):
+            # Skip separator lines
+            if '|-' in line or '-|' in line or '---' in line:
                 continue
+                
+            # Split line by |
+            parts = [part.strip() for part in line.split('|') if part.strip()]
             
-            # Clean and split cells
-            cells = [cell.strip() for cell in line.split('|') if cell.strip()]
-            if cells:
-                table_lines.append(cells)
+            if len(parts) >= 2:
+                trend = re.sub(r'\*\*(.*?)\*\*', r'\1', parts[0]).strip()
+                observation = re.sub(r'\*\*(.*?)\*\*', r'\1', parts[1]).strip()
+                
+                table_data.append([
+                    Paragraph(trend, styles['content']),
+                    Paragraph(observation, styles['content'])
+                ])
         
-        # Process table lines into formatted cells
-        for i, row in enumerate(table_lines):
-            formatted_row = []
-            for cell in row:
-                cell_text = re.sub(r'\*\*(.*?)\*\*', r'\1', cell).strip()
-                style = styles['subheading'] if i == 0 else styles['content']
-                formatted_row.append(Paragraph(cell_text, style))
-            table_data.append(formatted_row)
-        
-        # Ensure all rows have same number of columns
-        if table_data:
-            max_cols = max(len(row) for row in table_data)
-            for row in table_data:
-                while len(row) < max_cols:
-                    style = styles['subheading'] if row is table_data[0] else styles['content']
-                    row.append(Paragraph('', style))
-                    
     except Exception as e:
         st.error(f"Table processing error: {str(e)}")
         return []
@@ -303,36 +265,78 @@ def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
     return table_data
 
 def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
-    """Create formatted table with standard fonts"""
+    """Create formatted table with consistent two-column layout"""
     if not table_data:
         return None
 
-    # Calculate column widths
+    # Calculate column widths - make first column slightly narrower
     available_width = A4[0] - (50*mm)
-    num_cols = len(table_data[0])
-    col_widths = [available_width / num_cols] * num_cols
+    col_widths = [available_width * 0.35, available_width * 0.65]
     
     # Create table
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
     
     # Define style
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F8F9F9')),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        # Header row styling
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F5F5F5')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        
+        # Content styling
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        
+        # Padding and spacing
         ('TOPPADDING', (0, 0), (-1, -1), 12),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        
+        # Borders
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+        
+        # Alignment
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     
     return table
+
+def process_content_section(section: str, styles: Dict) -> List[Any]:
+    """Process content sections with proper table handling"""
+    elements = []
+    content_text = section.strip()
+    
+    # Check for table content
+    if '|' in content_text and content_text.count('\n') > 1:
+        try:
+            # Process table
+            table_data = process_table_content(content_text, styles)
+            if table_data:
+                elements.append(Spacer(1, 12))
+                table = create_formatted_table(table_data, styles)
+                if table:
+                    elements.append(table)
+                elements.append(Spacer(1, 12))
+            else:
+                elements.append(Paragraph(unescape(content_text), styles['content']))
+        except Exception as e:
+            st.error(f"Error processing table: {str(e)}")
+            elements.append(Paragraph(unescape(content_text), styles['content']))
+    else:
+        # Handle non-table content
+        paragraphs = [p.strip() for p in content_text.split('\n') if p.strip()]
+        for para in paragraphs:
+            para = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', para)
+            elements.append(Paragraph(unescape(para), styles['content']))
+            elements.append(Spacer(1, 8))
+    
+    return elements
+
 def display_results():
     """Display only the latest analysis result with its download button"""
     if st.session_state.results and len(st.session_state.results) > 0:
