@@ -6,3 +6,4 @@ altair
 xlsxwriter
 Pillow
 python-dateutil
+PyPDF2
