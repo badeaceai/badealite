@@ -225,39 +225,74 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
     finally:
         buffer.close()
 def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
-    """Process table content with consistent two-column format"""
+    """Process table content consistently regardless of format"""
     table_data = []
     try:
-        # Add table headers
-        headers = ['Trend', 'Observation']
-        table_data.append([
-            Paragraph(headers[0], styles['subheading']),
-            Paragraph(headers[1], styles['subheading'])
-        ])
-        
         # Split into lines and clean up
         lines = [line.strip() for line in content_text.split('\n') if line.strip()]
         
-        current_trend = None
-        current_observation = None
+        # Find start of actual table content
+        start_idx = 0
+        for i, line in enumerate(lines):
+            if '|' in line:
+                start_idx = i
+                break
         
-        for line in lines:
+        # Process only table lines
+        table_lines = []
+        for line in lines[start_idx:]:
             # Skip separator lines
-            if '|-' in line or '-|' in line or '---' in line:
+            if any(sep in line for sep in ['|-', '-|', '---']):
+                continue
+            if '|' not in line:
                 continue
                 
-            # Split line by |
-            parts = [part.strip() for part in line.split('|') if part.strip()]
+            # Clean and split cells
+            cells = line.split('|')
+            # Remove empty cells from start/end that come from leading/trailing |
+            cells = [cell.strip() for cell in cells if cell.strip()]
             
-            if len(parts) >= 2:
-                trend = re.sub(r'\*\*(.*?)\*\*', r'\1', parts[0]).strip()
-                observation = re.sub(r'\*\*(.*?)\*\*', r'\1', parts[1]).strip()
-                
-                table_data.append([
-                    Paragraph(trend, styles['content']),
-                    Paragraph(observation, styles['content'])
-                ])
+            if cells:  # Only process non-empty rows
+                table_lines.append(cells)
         
+        # Determine header type from first content row
+        if table_lines:
+            first_cell = table_lines[0][0].lower() if table_lines[0] else ""
+            if "root cause" in first_cell:
+                header_row = ["Root Cause", "Key Implication"]
+            else:
+                header_row = ["Trend", "Observation"]
+            
+            # Add header row as first row if it's not already present
+            if table_lines[0][0].strip() != header_row[0]:
+                table_lines.insert(0, header_row)
+        
+        # Process table lines into formatted cells
+        for i, row in enumerate(table_lines):
+            formatted_row = []
+            for cell in row:
+                # Remove bold markers and clean text
+                cell_text = re.sub(r'\*\*(.*?)\*\*', r'\1', cell).strip()
+                
+                # Apply appropriate style
+                if i == 0:  # Header row
+                    formatted_cell = Paragraph(cell_text, styles['subheading'])
+                else:  # Content rows
+                    formatted_cell = Paragraph(cell_text, styles['content'])
+                formatted_row.append(formatted_cell)
+            
+            if formatted_row:  # Only add non-empty rows
+                table_data.append(formatted_row)
+        
+        # Ensure all rows have same number of columns
+        if table_data:
+            max_cols = max(len(row) for row in table_data)
+            # Create empty cell with appropriate style
+            for i, row in enumerate(table_data):
+                while len(row) < max_cols:
+                    style = styles['subheading'] if i == 0 else styles['content']
+                    row.append(Paragraph('', style))
+                    
     except Exception as e:
         st.error(f"Table processing error: {str(e)}")
         return []
@@ -265,13 +300,13 @@ def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
     return table_data
 
 def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
-    """Create formatted table with consistent two-column layout"""
+    """Create formatted table with consistent styling"""
     if not table_data:
         return None
 
-    # Calculate column widths - make first column slightly narrower
+    # Calculate column widths
     available_width = A4[0] - (50*mm)
-    col_widths = [available_width * 0.35, available_width * 0.65]
+    col_widths = [available_width * 0.5, available_width * 0.5]  # Equal width columns
     
     # Create table
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -280,16 +315,15 @@ def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
     table.setStyle(TableStyle([
         # Header row styling
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F5F5F5')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
         
         # Content styling
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('BACKGROUND', (0, 1), (-1, -1), colors.white),
         
-        # Padding and spacing
+        # Spacing
         ('TOPPADDING', (0, 0), (-1, -1), 12),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
         ('LEFTPADDING', (0, 0), (-1, -1), 12),
@@ -297,7 +331,6 @@ def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
         
         # Borders
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
         
         # Alignment
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
