@@ -215,98 +215,59 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         return b''
     finally:
         buffer.close()
-
-def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
-    """Process table content with improved parsing"""
-    table_data = []
-    try:
-        # Split into lines and clean up
-        lines = [line.strip() for line in content_text.split('\n') if line.strip()]
-        
-        # Find the header and separator lines
-        header_idx = -1
-        separator_idx = -1
-        for i, line in enumerate(lines):
-            if '|' in line:
-                if header_idx == -1:
-                    header_idx = i
-                elif all(c in '|-: ' for c in line):
-                    separator_idx = i
-                    break
-        
-        if header_idx == -1 or separator_idx == -1:
-            return []
-        
-        # Process header
-        header = lines[header_idx]
-        header_cells = [cell.strip() for cell in header.split('|') if cell.strip()]
-        header_row = [Paragraph(cell, styles['subheading']) for cell in header_cells]
-        table_data.append(header_row)
-        
-        # Process data rows
-        for line in lines[separator_idx + 1:]:
-            if '|' not in line or not any(c.strip() for c in line.split('|')):
-                continue
-            
-            cells = [cell.strip() for cell in line.split('|') if cell.strip()]
-            row_data = []
-            for cell in cells:
-                # Clean cell content
-                clean_cell = re.sub(r'\*\*(.*?)\*\*', r'\1', cell)
-                clean_cell = re.sub(r'\*(.*?)\*', r'\1', clean_cell)
-                if clean_cell:
-                    row_data.append(Paragraph(clean_cell, styles['content']))
-            
-            if row_data:
-                # Ensure row has same number of columns as header
-                while len(row_data) < len(header_row):
-                    row_data.append(Paragraph('', styles['content']))
-                table_data.append(row_data[:len(header_row)])
-        
-        return table_data
-    except Exception as e:
-        st.error(f"Table processing error: {str(e)}")
-        return []
-
 def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
-    """Create formatted table with enhanced error handling"""
+    """Create formatted table with proper width calculations and error handling"""
     if not table_data or len(table_data) < 2:  # Need at least header and one data row
         return None
 
     try:
-        # Calculate optimal column widths
+        # Validate table structure
         num_cols = len(table_data[0])
+        if num_cols == 0:
+            st.error("Invalid table structure: no columns found")
+            return None
+
+        # Calculate available width
         available_width = A4[0] - (2 * 25*mm)  # Total width minus margins
-        col_widths = [available_width / num_cols] * num_cols
+
+        # Calculate column widths - ensure minimum column width
+        min_col_width = 30*mm  # minimum width per column
+        default_col_width = max(min_col_width, available_width / num_cols)
+        col_widths = [default_col_width] * num_cols
+
+        # Adjust widths if they exceed page width
+        total_width = sum(col_widths)
+        if total_width > available_width:
+            ratio = available_width / total_width
+            col_widths = [width * ratio for width in col_widths]
 
         # Create table with calculated widths
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
         
-        # Enhanced table styling
+        # Define table style
         table.setStyle(TableStyle([
             # Header styling
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F8F9F9')),
             ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-            ('FONTNAME', (0, 0), (-1, 0), 'Lato-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('TOPPADDING', (0, 0), (-1, 0), 12),
             
             # Content styling
-            ('FONTNAME', (0, 1), (-1, -1), 'Lato'),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
-            ('TOPPADDING', (0, 1), (-1, -1), 10),
-            
-            # Grid styling
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.grey),
-            
-            # Alignment
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             
-            # Row styling
+            # Spacing
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            
+            # Grid
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            
+            # Alternate row colors
             *[('BACKGROUND', (0, i), (-1, i), colors.HexColor('#F8F9F9' if i % 2 else '#FFFFFF'))
               for i in range(1, len(table_data))]
         ]))
@@ -317,6 +278,82 @@ def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
         st.error(f"Table creation error: {str(e)}")
         return None
 
+def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
+    """Process table content with enhanced validation"""
+    table_data = []
+    try:
+        # Split into lines and clean up
+        lines = [line.strip() for line in content_text.split('\n') if line.strip()]
+        
+        # Validate minimum table structure
+        if len(lines) < 3:  # Need header, separator, and at least one data row
+            return []
+            
+        # Process header first to establish column count
+        header_line = lines[0]
+        if '|' not in header_line:
+            return []
+            
+        # Extract and validate header cells
+        header_cells = [cell.strip() for cell in header_line.split('|') if cell.strip()]
+        if not header_cells:
+            return []
+            
+        # Create header row
+        header_row = [Paragraph(cell, styles['subheading']) for cell in header_cells]
+        table_data.append(header_row)
+        
+        # Find separator line
+        separator_found = False
+        data_start = 1
+        for i, line in enumerate(lines[1:], 1):
+            if all(c in '|-: ' for c in line):
+                separator_found = True
+                data_start = i + 1
+                break
+                
+        if not separator_found:
+            return []
+            
+        # Process data rows
+        for line in lines[data_start:]:
+            if '|' not in line:
+                continue
+                
+            # Extract and clean cells
+            cells = [cell.strip() for cell in line.split('|') if cell]
+            if not cells:
+                continue
+                
+            # Format cells
+            row_data = []
+            for cell in cells:
+                # Clean cell content
+                clean_cell = re.sub(r'\*\*(.*?)\*\*', r'\1', cell)
+                clean_cell = re.sub(r'\*(.*?)\*', r'\1', clean_cell)
+                clean_cell = clean_cell.strip()
+                
+                if clean_cell:
+                    row_data.append(Paragraph(clean_cell, styles['content']))
+                else:
+                    row_data.append(Paragraph('-', styles['content']))
+            
+            # Ensure row has same number of columns as header
+            while len(row_data) < len(header_cells):
+                row_data.append(Paragraph('-', styles['content']))
+            row_data = row_data[:len(header_cells)]  # Trim excess columns
+            
+            table_data.append(row_data)
+        
+        # Final validation
+        if len(table_data) < 2:  # Need at least one data row
+            return []
+            
+        return table_data
+
+    except Exception as e:
+        st.error(f"Table processing error: {str(e)}")
+        return []
 def process_content_section(section: str, styles: Dict) -> List[Any]:
     """Process content sections with improved table handling"""
     elements = []
