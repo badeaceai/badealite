@@ -227,62 +227,72 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
 
 
 def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
-    """Enhanced table content processing with better error handling"""
+    """Strict table content processing that handles various markdown formats"""
     table_data = []
     try:
-        # Split into lines and clean up
-        lines = content_text.split('\n')
-        table_lines = []
+        # Split into lines and remove empty lines
+        lines = [line.strip() for line in content_text.split('\n') if line.strip()]
         
-        # Find valid table lines
-        for line in lines:
-            line = line.strip()
-            if line and '|' in line:
-                # Skip separator lines
-                if not line.replace('|', '').replace('-', '').replace(' ', '').replace(':', ''):
-                    continue
-                cells = [cell.strip() for cell in line.split('|')]
-                # Remove empty cells from start/end
-                cells = [cell for cell in cells if cell]
-                if cells:
-                    table_lines.append(cells)
-
-        if len(table_lines) < 2:  # Need at least header and one data row
+        # Find table boundaries
+        start_idx = None
+        end_idx = None
+        for i, line in enumerate(lines):
+            if '|' in line:
+                if start_idx is None:
+                    start_idx = i
+                end_idx = i
+        
+        if start_idx is None:
             return []
-
-        # Process header row
-        header_cells = []
-        for cell in table_lines[0]:
-            # Clean header text
-            clean_text = re.sub(r'\*\*(.*?)\*\*', r'\1', cell).strip()
-            header_cells.append(Paragraph(clean_text, styles['subheading']))
-        table_data.append(header_cells)
-
-        # Process data rows
-        for row in table_lines[1:]:
-            row_cells = []
-            for cell in row:
-                # Clean cell text
-                clean_text = re.sub(r'\*\*(.*?)\*\*', r'\1', cell).strip()
-                clean_text = re.sub(r'\s+', ' ', clean_text)  # Normalize whitespace
-                if clean_text:
-                    row_cells.append(Paragraph(clean_text, styles['content']))
-                else:
-                    row_cells.append(Paragraph('-', styles['content']))  # Placeholder for empty cells
-
-            # Ensure row has same number of columns as header
-            while len(row_cells) < len(header_cells):
-                row_cells.append(Paragraph('-', styles['content']))
             
-            # Trim excess columns if any
-            row_cells = row_cells[:len(header_cells)]
-            table_data.append(row_cells)
+        # Extract table lines
+        table_lines = lines[start_idx:end_idx + 1]
+        
+        # Process each line
+        for i, line in enumerate(table_lines):
+            # Skip separator lines (containing only |, -, and spaces)
+            if all(c in '|-: ' for c in line):
+                continue
+                
+            # Process cells
+            cells = line.split('|')
+            # Remove empty cells from edges (caused by leading/trailing |)
+            cells = [cell.strip() for cell in cells if cell.strip()]
+            
+            if not cells:  # Skip empty rows
+                continue
+                
+            # Format cells
+            formatted_cells = []
+            for cell in cells:
+                # Remove any markdown formatting
+                clean_cell = re.sub(r'\*\*(.*?)\*\*', r'\1', cell)
+                clean_cell = re.sub(r'\*(.*?)\*', r'\1', clean_cell)
+                clean_cell = clean_cell.strip()
+                
+                # Create paragraph with appropriate style
+                if i == 0:  # Header row
+                    formatted_cells.append(Paragraph(clean_cell, styles['subheading']))
+                else:  # Data rows
+                    formatted_cells.append(Paragraph(clean_cell, styles['content']))
+            
+            if formatted_cells:
+                table_data.append(formatted_cells)
+        
+        # Ensure all rows have same number of columns
+        if table_data:
+            max_cols = max(len(row) for row in table_data)
+            for row in table_data:
+                while len(row) < max_cols:
+                    style = styles['subheading'] if row == table_data[0] else styles['content']
+                    row.append(Paragraph('', style))
+        
+        return table_data
 
     except Exception as e:
         st.error(f"Table processing error: {str(e)}")
+        print(f"Detailed error: {str(e)}")  # For debugging
         return []
-
-    return table_data
 
 def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
     """Create formatted table with enhanced error handling"""
