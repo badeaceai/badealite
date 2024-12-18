@@ -87,7 +87,7 @@ def create_styles() -> Dict[str, ParagraphStyle]:
     }
     return styles
 def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> bytes:
-    """Create a styled PDF report using only standard fonts"""
+    """Create a styled PDF report with proper table handling"""
     buffer = BytesIO()
     
     try:
@@ -101,7 +101,7 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
             bottomMargin=25*mm
         )
         
-        # Create styles with standard fonts
+        # Use standard fonts instead of Lato
         styles = dict(
             title=ParagraphStyle(
                 'CustomTitle',
@@ -148,76 +148,67 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
             )
         )
         
-        # Initialize elements list
         elements = []
         
-        # Add logo if available
-        try:
-            logo_path = "badea.jpg"
-            if os.path.exists(logo_path):
-                img = Image(logo_path, width=220, height=40)
-                elements.append(img)
-                elements.append(Spacer(1, 20))
-        except:
-            pass  # Skip logo if not available
-        
-        # Define report titles
-        REPORT_TITLES = {
-            'whats_happening': 'Situation Analysis',
-            'what_could_happen': 'Scenario Insight Summary',
-            'why_this_happens': 'Possible Causes',
-            'what_should_board_consider': 'Strategic Implications & Board Recommendations',
-            # Include variations without underscores and with spaces
-            'whats happening': 'Situation Analysis',
-            'what could happen': 'Scenario Insight Summary',
-            'why this happens': 'Possible Causes',
-            'what should board consider': 'Strategic Implications & Board Recommendations'
-        }
-
-        # Add title
-        title_text = REPORT_TITLES.get(analysis_type, f"Analysis Report: {analysis_type.replace('_', ' ').title()}")
-        elements.append(Paragraph(title_text, styles['title']))
-
-        # Add metadata
-        metadata_text = f"Generated on: {result.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
-        elements.append(Paragraph(metadata_text, styles['metadata']))
-        elements.append(Spacer(1, 20))
-        
-        # Process content
+        # Process content and find tables
         analysis_text = result.get('analysis', '')
-        if analysis_text:
-            sections = re.split(r'(?:\*\*|#)\s*(.*?)(?:\*\*|$)', analysis_text)
-            
-            for i, section in enumerate(sections):
-                if not section.strip():
-                    continue
-                    
-                if i % 2 == 0:  # Content
-                    paragraphs = [p.strip() for p in section.split('\n') if p.strip()]
-                    for para in paragraphs:
-                        # Handle table content
-                        if '|' in para:
-                            table_data = process_table_content(para, styles)
+        sections = re.split(r'(?:\*\*|#)\s*(.*?)(?:\*\*|$)', analysis_text)
+        
+        for i, section in enumerate(sections):
+            if not section.strip():
+                continue
+                
+            if i % 2 == 0:  # Content
+                content = section.strip()
+                paragraphs = content.split('\n')
+                
+                table_content = []
+                current_table = []
+                in_table = False
+                
+                for para in paragraphs:
+                    # Check for table markers
+                    if '|' in para and not para.strip().startswith('>'): # Avoid blockquotes
+                        if not in_table:
+                            in_table = True
+                        current_table.append(para)
+                    else:
+                        if in_table:
+                            # Process completed table
+                            table_content = '\n'.join(current_table)
+                            table_data = process_table_content(table_content, styles)
                             if table_data:
                                 elements.append(Spacer(1, 12))
                                 table = create_formatted_table(table_data, styles)
                                 if table:
                                     elements.append(table)
                                 elements.append(Spacer(1, 12))
-                        else:
-                            # Regular paragraph
+                            current_table = []
+                            in_table = False
+                            
+                        if para.strip():
                             para = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', para)
                             elements.append(Paragraph(unescape(para), styles['content']))
                             elements.append(Spacer(1, 8))
-                else:  # Header
-                    elements.append(Spacer(1, 12))
-                    elements.append(Paragraph(section.strip(), styles['header']))
-                    elements.append(Spacer(1, 8))
+                
+                # Handle any remaining table
+                if current_table:
+                    table_content = '\n'.join(current_table)
+                    table_data = process_table_content(table_content, styles)
+                    if table_data:
+                        elements.append(Spacer(1, 12))
+                        table = create_formatted_table(table_data, styles)
+                        if table:
+                            elements.append(table)
+                        elements.append(Spacer(1, 12))
+            else:  # Header
+                elements.append(Spacer(1, 12))
+                elements.append(Paragraph(section.strip(), styles['header']))
+                elements.append(Spacer(1, 8))
         
         # Build PDF
         doc.build(elements)
-        pdf_bytes = buffer.getvalue()
-        return pdf_bytes
+        return buffer.getvalue()
         
     except Exception as e:
         st.error(f"Error creating PDF: {str(e)}")
@@ -225,73 +216,56 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
     finally:
         buffer.close()
 
-
 def process_table_content(content_text: str, styles: Dict) -> List[List[Any]]:
-    """Strict table content processing that handles various markdown formats"""
+    """Process table content with improved parsing"""
     table_data = []
     try:
-        # Split into lines and remove empty lines
+        # Split into lines and clean up
         lines = [line.strip() for line in content_text.split('\n') if line.strip()]
         
-        # Find table boundaries
-        start_idx = None
-        end_idx = None
+        # Find the header and separator lines
+        header_idx = -1
+        separator_idx = -1
         for i, line in enumerate(lines):
             if '|' in line:
-                if start_idx is None:
-                    start_idx = i
-                end_idx = i
+                if header_idx == -1:
+                    header_idx = i
+                elif all(c in '|-: ' for c in line):
+                    separator_idx = i
+                    break
         
-        if start_idx is None:
+        if header_idx == -1 or separator_idx == -1:
             return []
-            
-        # Extract table lines
-        table_lines = lines[start_idx:end_idx + 1]
         
-        # Process each line
-        for i, line in enumerate(table_lines):
-            # Skip separator lines (containing only |, -, and spaces)
-            if all(c in '|-: ' for c in line):
+        # Process header
+        header = lines[header_idx]
+        header_cells = [cell.strip() for cell in header.split('|') if cell.strip()]
+        header_row = [Paragraph(cell, styles['subheading']) for cell in header_cells]
+        table_data.append(header_row)
+        
+        # Process data rows
+        for line in lines[separator_idx + 1:]:
+            if '|' not in line or not any(c.strip() for c in line.split('|')):
                 continue
-                
-            # Process cells
-            cells = line.split('|')
-            # Remove empty cells from edges (caused by leading/trailing |)
-            cells = [cell.strip() for cell in cells if cell.strip()]
             
-            if not cells:  # Skip empty rows
-                continue
-                
-            # Format cells
-            formatted_cells = []
+            cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+            row_data = []
             for cell in cells:
-                # Remove any markdown formatting
+                # Clean cell content
                 clean_cell = re.sub(r'\*\*(.*?)\*\*', r'\1', cell)
                 clean_cell = re.sub(r'\*(.*?)\*', r'\1', clean_cell)
-                clean_cell = clean_cell.strip()
-                
-                # Create paragraph with appropriate style
-                if i == 0:  # Header row
-                    formatted_cells.append(Paragraph(clean_cell, styles['subheading']))
-                else:  # Data rows
-                    formatted_cells.append(Paragraph(clean_cell, styles['content']))
+                if clean_cell:
+                    row_data.append(Paragraph(clean_cell, styles['content']))
             
-            if formatted_cells:
-                table_data.append(formatted_cells)
-        
-        # Ensure all rows have same number of columns
-        if table_data:
-            max_cols = max(len(row) for row in table_data)
-            for row in table_data:
-                while len(row) < max_cols:
-                    style = styles['subheading'] if row == table_data[0] else styles['content']
-                    row.append(Paragraph('', style))
+            if row_data:
+                # Ensure row has same number of columns as header
+                while len(row_data) < len(header_row):
+                    row_data.append(Paragraph('', styles['content']))
+                table_data.append(row_data[:len(header_row)])
         
         return table_data
-
     except Exception as e:
         st.error(f"Table processing error: {str(e)}")
-        print(f"Detailed error: {str(e)}")  # For debugging
         return []
 
 def create_formatted_table(table_data: List[List[Any]], styles: Dict) -> Table:
