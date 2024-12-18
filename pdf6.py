@@ -174,14 +174,60 @@ def process_content_section(section: str, styles: Dict) -> List[Any]:
     
     return elements
 
+def create_styles() -> Dict[str, ParagraphStyle]:
+    """Create styles using reliable system fonts for Streamlit cloud environment"""
+    styles = {
+        'title': ParagraphStyle(
+            'CustomTitle',
+            fontName='Helvetica-Bold',  # Using standard Helvetica instead of Lato
+            fontSize=16,
+            spaceAfter=20,
+            textColor=colors.black,
+            leading=20
+        ),
+        'header': ParagraphStyle(
+            'CustomHeader',
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            spaceAfter=10,
+            textColor=colors.black,
+            leading=18
+        ),
+        'subheading': ParagraphStyle(
+            'CustomSubheading',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            textColor=colors.black,
+            leading=12,
+            spaceBefore=6,
+            spaceAfter=6
+        ),
+        'content': ParagraphStyle(
+            'CustomContent',
+            fontName='Helvetica',
+            fontSize=10,
+            textColor=colors.black,
+            leading=12,
+            spaceBefore=6,
+            spaceAfter=6
+        ),
+        'metadata': ParagraphStyle(
+            'CustomMetadata',
+            fontName='Helvetica',
+            fontSize=9,
+            textColor=colors.black,
+            leading=12,
+            spaceBefore=6,
+            spaceAfter=6
+        )
+    }
+    return styles
+
 def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> bytes:
-    """Create a styled PDF report with proper table handling"""
+    """Create a styled PDF report using system fonts"""
     buffer = BytesIO()
     
     try:
-        # Download and register fonts
-        download_and_register_fonts()
-        
         # Create PDF document
         doc = SimpleDocTemplate(
             buffer,
@@ -192,10 +238,8 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
             bottomMargin=25*mm
         )
         
-        # Get styles
+        # Get styles with system fonts
         styles = create_styles()
-        
-        # Initialize elements list
         elements = []
         
         # Add logo if available
@@ -205,31 +249,21 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
                 img = Image(logo_path, width=220, height=40)
                 elements.append(img)
                 elements.append(Spacer(1, 20))
-        except:
-            pass
+        except Exception as e:
+            pass  # Silently handle logo loading issues
+        
+        # Define report titles
         REPORT_TITLES = {
             'whats_happening': 'Situation Analysis',
             'what_could_happen': 'Scenario Insight Summary',
             'why_this_happens': 'Possible Causes',
-            'what_should_board_consider': 'Strategic Implications & Board Recommendations',
-            # Include variations without underscores and with spaces
-            'whats happening': 'Situation Analysis',
-            'what could happen': 'Scenario Insight Summary',
-            'why this happens': 'Possible Causes',
-            'what should board consider': 'Strategic Implications & Board Recommendations',
-            # Include variations without spaces
-            'whatshappening': 'Situation Analysis',
-            'whatcouldhappen': 'Scenario Insight Summary',
-            'whythishappens': 'Possible Causes',
-            'whatshouldboardconsider': 'Strategic Implications & Board Recommendations'
+            'what_should_board_consider': 'Strategic Implications & Board Recommendations'
         }
 
-        # Then modify the title section to use this mapping
-        title_text = REPORT_TITLES.get(analysis_type, f"Analysis Report: {analysis_type.replace('_', ' ').title()}")
         # Add title
-        # title_text = f"Board Analysis Report: {analysis_type.replace('_', ' ').title()}"
+        title_text = REPORT_TITLES.get(analysis_type, f"Analysis Report: {analysis_type.replace('_', ' ').title()}")
         elements.append(Paragraph(title_text, styles['title']))
-
+        
         # Add metadata
         metadata_text = f"Generated on: {result.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
         elements.append(Paragraph(metadata_text, styles['metadata']))
@@ -238,7 +272,6 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         # Process content
         analysis_text = result.get('analysis', '')
         if analysis_text:
-            # Split content into sections
             sections = re.split(r'(?:\*\*|#)\s*(.*?)(?:\*\*|$)', analysis_text)
             
             for i, section in enumerate(sections):
@@ -262,54 +295,6 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         return b''
     finally:
         buffer.close()
-def create_styles() -> Dict[str, ParagraphStyle]:
-    """Create complete set of styles including table-specific styles"""
-    styles = {
-        'title': ParagraphStyle(
-            'CustomTitle',
-            fontName='Lato-Bold',
-            fontSize=16,
-            spaceAfter=20,
-            textColor=colors.black,
-            leading=20
-        ),
-        'header': ParagraphStyle(
-            'CustomHeader',
-            fontName='Lato-Bold',
-            fontSize=14,
-            spaceAfter=10,
-            textColor=colors.black,
-            leading=18
-        ),
-        'subheading': ParagraphStyle(
-            'CustomSubheading',
-            fontName='Lato-Bold',
-            fontSize=10,
-            textColor=colors.black,
-            leading=12,
-            spaceBefore=6,
-            spaceAfter=6
-        ),
-        'content': ParagraphStyle(
-            'CustomContent',
-            fontName='Lato',
-            fontSize=10,
-            textColor=colors.black,
-            leading=12,
-            spaceBefore=6,
-            spaceAfter=6
-        ),
-        'metadata': ParagraphStyle(
-            'CustomMetadata',
-            fontName='Lato',
-            fontSize=9,
-            textColor=colors.black,
-            leading=12,
-            spaceBefore=6,
-            spaceAfter=6
-        )
-    }
-    return styles
 
 def display_results():
     """Display only the latest analysis result with its download button"""
@@ -629,6 +614,23 @@ st.markdown("""
 
     .stMarkdown {
         color: #1e293b !important;
+    }
+    /* Submit button styling */
+    .stButton button[kind="formSubmit"] {
+        background: linear-gradient(135deg, #2563eb, #1e3a8a);
+        color: white;
+        border-radius: 8px;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        width: 100%;
+        margin-top: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .stButton button[kind="formSubmit"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -969,7 +971,15 @@ def main():
             uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
             doc_content = read_pdf(uploaded_file) if uploaded_file else None
         else:
-            doc_content = st.text_area("Enter text for analysis", height=200)
+            # Create a form for text input
+            with st.form(key='text_input_form'):
+                text_input = st.text_area("Enter text for analysis", height=200)
+                submit_button = st.form_submit_button(label='Submit Text')
+                
+                if submit_button:
+                    doc_content = text_input
+                else:
+                    doc_content = None
         st.markdown('</div>', unsafe_allow_html=True)
 
     with right_col:
