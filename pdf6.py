@@ -198,7 +198,24 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
             'whythishappens': 'Possible Causes',
             'whatshouldboardconsider': 'Strategic Implications & Board Recommendations'
         }
-
+        elements.append(Spacer(1, 20))
+        disclaimer_style = ParagraphStyle(
+            'Disclaimer',
+            fontName='Helvetica-Oblique',
+            fontSize=8,
+            textColor=colors.gray,
+            alignment=1,  # Center alignment
+            leading=10
+        )
+        disclaimer_text = (
+            "Disclaimer: This analysis is provided for informational purposes only and "
+            "should not be considered as financial, legal, or investment advice. "
+            "The content is generated using artificial intelligence and may require verification. "
+            "Users should exercise their own judgment and consult appropriate professionals "
+            "before making any decisions based on this information. "
+            "© BADEA © CEAI All rights reserved."
+        )
+        
         # Then modify the title section to use this mapping
         title_text = REPORT_TITLES.get(analysis_type, f"Analysis Report: {analysis_type.replace('_', ' ').title()}")
         # Add title
@@ -226,7 +243,9 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
                     elements.append(Spacer(1, 12))
                     elements.append(Paragraph(section.strip(), styles['header']))
                     elements.append(Spacer(1, 8))
-        
+
+        elements.append(Paragraph(disclaimer_text, disclaimer_style))
+
         # Build PDF
         doc.build(elements)
         pdf_bytes = buffer.getvalue()
@@ -525,7 +544,13 @@ def display_results():
                     <div class="result-content">{analysis_content}</div>
                 </div>
             """, unsafe_allow_html=True)
+            disclaimer_text = """
+                <div class="disclaimer">
+                    <strong>Disclaimer:</strong>Disclaimer: This analysis is provided for informational purposes only and should not be considered as financial, legal, or investment advice. The content is generated using artificial intelligence and may require verification. Users should exercise their own judgment and consult appropriate professionals before making any decisions based on this information. © BADEA © CEAI, All rights reserved.
+                </div>
+            """
             
+            st.markdown(disclaimer_text, unsafe_allow_html=True)
         
         with col2:
             pdf_bytes = create_styled_pdf_report(result, result['analysis_type'])
@@ -784,6 +809,25 @@ st.markdown("""
     .stButton button[kind="formSubmit"]:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    /* Disclaimer styling */
+    .disclaimer {
+        background-color: #f8f9fa;
+        border-left: 4px solid #2563eb;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+        color: #1e293b !important;
+        line-height: 1.5;
+    }
+
+    .pdf-disclaimer {
+        font-size: 8pt;
+        color: #64748b;
+        border-top: 1px solid #e2e8f0;
+        margin-top: 2rem;
+        padding-top: 1rem;
+        font-style: italic;
+    }
     }
     </style>
 """, unsafe_allow_html=True)
