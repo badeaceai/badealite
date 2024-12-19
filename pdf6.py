@@ -1224,7 +1224,7 @@ def main():
         # Clear results button
         if st.sidebar.button("Click to return"):
             st.session_state.results = []
-            st.experimental_rerun()
+            st.rerun()  # Updated from experimental_rerun()
 
 if __name__ == "__main__":
     main()
