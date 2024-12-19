@@ -22,7 +22,77 @@ from PIL import Image as PILImage
 from typing import Union, Optional
 import io
 
+def process_multiple_images(image_files, client: OpenAI) -> str:
+    """Process multiple image inputs and combine their descriptions for analysis."""
+    try:
+        combined_description = []
+        
+        for idx, image_file in enumerate(image_files, 1):
+            # Read and encode image
+            image_bytes = image_file.read()
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            
+            # Get image description using GPT-4 Vision
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Describe image {idx} in detail, focusing on key business and strategic aspects. Include all relevant details, numbers, and observations that could be important for board-level analysis. If financial data exists, please include time references and periods of which they incur as part of the analysis"
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=4096
+            )
+            
+            # Reset file pointer for future use
+            image_file.seek(0)
+            
+            # Add image description to the combined list
+            description = response.choices[0].message.content
+            combined_description.append(f"Image {idx} Analysis:\n{description}\n")
+        
+        # Combine all descriptions with clear separation
+        return "\n\n".join(combined_description)
+    except Exception as e:
+        st.error(f"Error processing images: {str(e)}")
+        return ""
 
+def process_input_content(input_type: str, uploaded_files, text_input: str, client: OpenAI) -> str:
+    """Process any type of input and return text content for analysis."""
+    try:
+        if input_type == "PDF Document" and uploaded_files:
+            return read_pdf(uploaded_files) or ""
+        elif input_type == "Images" and uploaded_files:  # Note the plural "Images"
+            try:
+                # Display all uploaded images
+                for image_file in uploaded_files:
+                    image = PILImage.open(image_file)
+                    st.image(image, caption=f"Uploaded Image: {image_file.name}", use_container_width=True)
+                    image_file.seek(0)  # Reset file pointer after displaying
+                
+                # Process all images together
+                return process_multiple_images(uploaded_files, client)
+            except Exception as e:
+                st.error(f"Error processing images: {str(e)}")
+                return ""
+        elif input_type == "Text Input" and text_input:
+            return text_input
+        return ""
+    except Exception as e:
+        st.error(f"Error processing input: {str(e)}")
+        return ""
 def process_image_input(image_file, client: OpenAI) -> str:
     """Process image input and convert to text description for analysis."""
     try:
@@ -61,28 +131,7 @@ def process_image_input(image_file, client: OpenAI) -> str:
         st.error(f"Error processing image: {str(e)}")
         return ""
 
-def process_input_content(input_type: str, uploaded_file, text_input: str, client: OpenAI) -> str:
-    """Process any type of input and return text content for analysis."""
-    try:
-        if input_type == "PDF Document" and uploaded_file:
-            return read_pdf(uploaded_file) or ""
-        elif input_type == "Image" and uploaded_file:
-            try:
-                # Display the uploaded image using PIL
-                image = PILImage.open(uploaded_file)
-                st.image(image, caption="Uploaded Image", use_container_width=True)
-                # Reset file pointer and process image
-                uploaded_file.seek(0)
-                return process_image_input(uploaded_file, client)
-            except Exception as e:
-                st.error(f"Error processing image: {str(e)}")
-                return ""
-        elif input_type == "Text Input" and text_input:
-            return text_input
-        return ""
-    except Exception as e:
-        st.error(f"Error processing input: {str(e)}")
-        return ""
+
 def download_and_register_fonts():
     """Download and register required fonts"""
     font_urls = {
@@ -1167,7 +1216,7 @@ def main():
     
     with left_col:
         st.markdown('<div class="input-container">', unsafe_allow_html=True)
-        input_type = st.radio("Select input type:", ["PDF Document", "Text Input", "Image"], horizontal=True)
+        input_type = st.radio("Select input type:", ["PDF Document", "Text Input", "Images"], horizontal=True)
         
         # Initialize content in session state
         if 'processed_content' not in st.session_state:
@@ -1178,10 +1227,10 @@ def main():
             uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
             if uploaded_file:
                 st.session_state.processed_content = process_input_content(input_type, uploaded_file, "", st.session_state['client'])
-        elif input_type == "Image":
-            uploaded_file = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg'])
-            if uploaded_file:
-                st.session_state.processed_content = process_input_content(input_type, uploaded_file, "", st.session_state['client'])
+        elif input_type == "Images":
+            uploaded_files = st.file_uploader("Upload Images", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+            if uploaded_files:
+                st.session_state.processed_content = process_input_content(input_type, uploaded_files, "", st.session_state['client'])
         else:
             with st.form(key='text_input_form'):
                 text_input = st.text_area("Enter text for analysis", height=200)
@@ -1224,7 +1273,7 @@ def main():
         # Clear results button
         if st.sidebar.button("Click to return"):
             st.session_state.results = []
-            st.rerun()  # Updated from experimental_rerun()
+            st.rerun()
 
 if __name__ == "__main__":
     main()
