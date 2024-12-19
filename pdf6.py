@@ -19,7 +19,70 @@ from html import unescape
 import os
 import requests
 from PIL import Image as PILImage
+from typing import Union, Optional
+import io
 
+
+def process_image_input(image_file, client: OpenAI) -> str:
+    """Process image input and convert to text description for analysis."""
+    try:
+        # Read and encode image
+        image_bytes = image_file.read()
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Get image description using GPT-4 Vision
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Describe this image in detail, focusing on key business and strategic aspects. Include all relevant details, numbers, and observations that could be important for board-level analysis.if financial data exists, please include time references and periods of which they incur as part of the analysis"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}",
+                                "detail": "high"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=4096
+        )
+        
+        # Reset file pointer for future use
+        image_file.seek(0)
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error processing image: {str(e)}")
+        return ""
+
+def process_input_content(input_type: str, uploaded_file, text_input: str, client: OpenAI) -> str:
+    """Process any type of input and return text content for analysis."""
+    try:
+        if input_type == "PDF Document" and uploaded_file:
+            return read_pdf(uploaded_file) or ""
+        elif input_type == "Image" and uploaded_file:
+            try:
+                # Display the uploaded image using PIL
+                image = PILImage.open(uploaded_file)
+                st.image(image, caption="Uploaded Image", use_container_width=True)
+                # Reset file pointer and process image
+                uploaded_file.seek(0)
+                return process_image_input(uploaded_file, client)
+            except Exception as e:
+                st.error(f"Error processing image: {str(e)}")
+                return ""
+        elif input_type == "Text Input" and text_input:
+            return text_input
+        return ""
+    except Exception as e:
+        st.error(f"Error processing input: {str(e)}")
+        return ""
 def download_and_register_fonts():
     """Download and register required fonts"""
     font_urls = {
@@ -91,6 +154,9 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
     buffer = BytesIO()
     
     try:
+        # Download and register fonts
+        download_and_register_fonts()
+        
         # Create PDF document
         doc = SimpleDocTemplate(
             buffer,
@@ -101,114 +167,70 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
             bottomMargin=25*mm
         )
         
-        # Use standard fonts instead of Lato
-        styles = dict(
-            title=ParagraphStyle(
-                'CustomTitle',
-                fontName='Helvetica-Bold',
-                fontSize=16,
-                spaceAfter=20,
-                textColor=colors.black,
-                leading=20
-            ),
-            header=ParagraphStyle(
-                'CustomHeader',
-                fontName='Helvetica-Bold',
-                fontSize=14,
-                spaceAfter=10,
-                textColor=colors.black,
-                leading=18
-            ),
-            subheading=ParagraphStyle(
-                'CustomSubheading',
-                fontName='Helvetica-Bold',
-                fontSize=10,
-                textColor=colors.black,
-                leading=12,
-                spaceBefore=6,
-                spaceAfter=6
-            ),
-            content=ParagraphStyle(
-                'CustomContent',
-                fontName='Helvetica',
-                fontSize=10,
-                textColor=colors.black,
-                leading=12,
-                spaceBefore=6,
-                spaceAfter=6
-            ),
-            metadata=ParagraphStyle(
-                'CustomMetadata',
-                fontName='Helvetica',
-                fontSize=9,
-                textColor=colors.black,
-                leading=12,
-                spaceBefore=6,
-                spaceAfter=6
-            )
-        )
+        # Get styles
+        styles = create_styles()
         
+        # Initialize elements list
         elements = []
         
-        # Process content and find tables
-        analysis_text = result.get('analysis', '')
-        sections = re.split(r'(?:\*\*|#)\s*(.*?)(?:\*\*|$)', analysis_text)
+        # Add logo if available
+        try:
+            logo_path = "badea.jpg"
+            if os.path.exists(logo_path):
+                img = Image(logo_path, width=220, height=40)
+                elements.append(img)
+                elements.append(Spacer(1, 20))
+        except:
+            pass
+        REPORT_TITLES = {
+            'whats_happening': 'Situational Analysis',
+            'what_could_happen': 'Scenario Insight Summary',
+            'why_this_happens': 'Possible Causes',
+            'what_should_board_consider': 'Strategic Implications & Board Recommendations',
+            # Include variations without underscores and with spaces
+            'whats happening': 'Situational Analysis',
+            'what could happen': 'Scenario Insight Summary',
+            'why this happens': 'Possible Causes',
+            'what should board consider': 'Strategic Implications & Board Recommendations',
+            # Include variations without spaces
+            'whatshappening': 'Situational Analysis',
+            'whatcouldhappen': 'Scenario Insight Summary',
+            'whythishappens': 'Possible Causes',
+            'whatshouldboardconsider': 'Strategic Implications & Board Recommendations'
+        }
+
+        # Then modify the title section to use this mapping
+        title_text = REPORT_TITLES.get(analysis_type, f"Analysis Report: {analysis_type.replace('_', ' ').title()}")
+        # Add title
+        # title_text = f"Board Analysis Report: {analysis_type.replace('_', ' ').title()}"
+        elements.append(Paragraph(title_text, styles['title']))
+
+        # Add metadata
+        metadata_text = f"Generated on: {result.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
+        elements.append(Paragraph(metadata_text, styles['metadata']))
+        elements.append(Spacer(1, 20))
         
-        for i, section in enumerate(sections):
-            if not section.strip():
-                continue
-                
-            if i % 2 == 0:  # Content
-                content = section.strip()
-                paragraphs = content.split('\n')
-                
-                table_content = []
-                current_table = []
-                in_table = False
-                
-                for para in paragraphs:
-                    # Check for table markers
-                    if '|' in para and not para.strip().startswith('>'): # Avoid blockquotes
-                        if not in_table:
-                            in_table = True
-                        current_table.append(para)
-                    else:
-                        if in_table:
-                            # Process completed table
-                            table_content = '\n'.join(current_table)
-                            table_data = process_table_content(table_content, styles)
-                            if table_data:
-                                elements.append(Spacer(1, 12))
-                                table = create_formatted_table(table_data, styles)
-                                if table:
-                                    elements.append(table)
-                                elements.append(Spacer(1, 12))
-                            current_table = []
-                            in_table = False
-                            
-                        if para.strip():
-                            para = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', para)
-                            elements.append(Paragraph(unescape(para), styles['content']))
-                            elements.append(Spacer(1, 8))
-                
-                # Handle any remaining table
-                if current_table:
-                    table_content = '\n'.join(current_table)
-                    table_data = process_table_content(table_content, styles)
-                    if table_data:
-                        elements.append(Spacer(1, 12))
-                        table = create_formatted_table(table_data, styles)
-                        if table:
-                            elements.append(table)
-                        elements.append(Spacer(1, 12))
-            else:  # Header
-                elements.append(Spacer(1, 12))
-                elements.append(Paragraph(section.strip(), styles['header']))
-                elements.append(Spacer(1, 8))
+        # Process content
+        analysis_text = result.get('analysis', '')
+        if analysis_text:
+            # Split content into sections
+            sections = re.split(r'(?:\*\*|#)\s*(.*?)(?:\*\*|$)', analysis_text)
+            
+            for i, section in enumerate(sections):
+                if not section.strip():
+                    continue
+                    
+                if i % 2 == 0:  # Content
+                    elements.extend(process_content_section(section, styles))
+                else:  # Header
+                    elements.append(Spacer(1, 12))
+                    elements.append(Paragraph(section.strip(), styles['header']))
+                    elements.append(Spacer(1, 8))
         
         # Build PDF
         doc.build(elements)
-        return buffer.getvalue()
+        pdf_bytes = buffer.getvalue()
+        return pdf_bytes
         
     except Exception as e:
         st.error(f"Error creating PDF: {str(e)}")
@@ -488,7 +510,7 @@ def display_results():
             
             # Get the appropriate title for the analysis type
             REPORT_TITLES = {
-                'whats_happening': 'Situation Analysis',
+                'whats_happening': 'Situational Analysis',
                 'what_could_happen': 'Scenario Insight Summary',
                 'why_this_happens': 'Possible Causes',
                 'what_should_board_consider': 'Strategic Implications & Board Recommendations'
@@ -503,6 +525,7 @@ def display_results():
                     <div class="result-content">{analysis_content}</div>
                 </div>
             """, unsafe_allow_html=True)
+            
         
         with col2:
             pdf_bytes = create_styled_pdf_report(result, result['analysis_type'])
@@ -539,7 +562,7 @@ st.markdown("""
         --secondary-color: #1e3a8a;
         --background-color: #f1f5f9;
         --surface-color: #ffffff;
-        --text-color: #1e293b;
+        --text-color: black;
         --border-color: #e2e8f0;
         --spacing-unit: 1rem;
         --font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -582,7 +605,7 @@ st.markdown("""
     /* Button styling */
     .stButton > button {
         background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: white;
+        color: white !important;
         border-radius: 8px;
         border: none;
         padding: 1rem;
@@ -607,11 +630,12 @@ st.markdown("""
         font-size: 11pt;
         line-height: 1.6;
         box-sizing: border-box;
+        color: black !important;
     }
     
     /* Result header styling */
     .result-header {
-        color: var(--primary-color);
+        color: var(--primary-color) !important;
         font-size: 18pt;
         font-weight: 700;
         margin-bottom: 1.5rem;
@@ -622,7 +646,7 @@ st.markdown("""
     
     /* Metadata styling */
     .result-metadata {
-        color: #64748b;
+        color: #64748b !important;
         font-size: 9pt;
         margin-bottom: 2rem;
         font-weight: 300;
@@ -633,6 +657,7 @@ st.markdown("""
         text-align: justify;
         margin-top: 1.5rem;
         font-weight: 400;
+        color: black !important;
     }
     
     /* Table styling */
@@ -641,6 +666,7 @@ st.markdown("""
         border-collapse: collapse;
         margin: 1.5rem 0;
         font-size: 10pt;
+        color: black !important;
     }
     
     .result-content table th,
@@ -648,6 +674,7 @@ st.markdown("""
         border: 1px solid var(--border-color);
         padding: 0.75rem;
         text-align: left;
+        color: black !important;
     }
     
     .result-content table th {
@@ -660,10 +687,12 @@ st.markdown("""
     .result-content ol {
         margin: 1rem 0;
         padding-left: 1.5rem;
+        color: black !important;
     }
     
     .result-content li {
         margin-bottom: 0.5rem;
+        color: black !important;
     }
     
     /* Section headers within content */
@@ -684,6 +713,7 @@ st.markdown("""
     .result-content p {
         margin-bottom: 1rem;
         line-height: 1.6;
+        color: black !important;
     }
     
     /* Number and currency formatting */
@@ -691,6 +721,7 @@ st.markdown("""
     .result-content .currency {
         font-family: 'Lato', monospace;
         white-space: nowrap;
+        color: black !important;
     }
     
     /* Hide Streamlit components */
@@ -713,17 +744,34 @@ st.markdown("""
             font-size: 10pt;
         }
     }
+    
+    /* Text color fixes */
+    .stMarkdown, .stText, .stTextInput, .stTextArea, p {
+        color: black !important;
+    }
+    
     .custom-text-color {
-    color: #1e293b !important;
+        color: black !important;
     }
-
-    .stMarkdown {
-        color: #1e293b !important;
+    
+    .element-container, .stMarkdown, p, .stText {
+        color: black !important;
     }
+    
+    /* Radio button text color fix */
+    .stRadio > div {
+        color: black !important;
+    }
+    
+    /* Info message text color */
+    .stAlert > div {
+        color: black !important;
+    }
+    
     /* Submit button styling */
     .stButton button[kind="formSubmit"] {
         background: linear-gradient(135deg, #2563eb, #1e3a8a);
-        color: white;
+        color: white !important;
         border-radius: 8px;
         border: none;
         padding: 0.75rem 1.5rem;
@@ -808,8 +856,8 @@ def read_pdf(pdf_file):
 def configure_openai() -> bool:
     """Configure  Secret Key"""
     with st.sidebar:
-        st.markdown("### 🔑 APP Configuration")
-        api_key = st.text_input("Enter Secret Key", type="password")
+        st.markdown("### 🔑 User ID")
+        api_key = st.text_input("Enter User ID", type="password")
         if api_key:
             st.session_state['client'] = OpenAI(api_key=api_key)
             return True
@@ -818,7 +866,7 @@ def configure_openai() -> bool:
 def create_professional_system_prompt() -> str:
     """Creates a standardized system prompt for consistent professional formatting."""
     return (
-        "You are a seasoned board advisor providing comprehensive strategic analysis. "
+        "You are a seasoned board advisor providing comprehensive strategic analysis. Explain and expressed from the perspective of board directors "
         "Follow these strict formatting rules: "
         "1. Use markdown bold for all section headers and key findings\n"
         "2. Numbers and Currency: "
@@ -829,6 +877,7 @@ def create_professional_system_prompt() -> str:
         "3. Text Formatting: "
         "   Use standard paragraph formatting with clear spacing. "
         "   Avoid italics, special characters, or unusual formatting. "
+        "   No ### at the start of the header or subheader"
         "   No special characters or fancy formatting. "
         "   Maintain consistent font and style throughout. "
         "   CRITICAL: Never join words together - always use spaces between words.\n"
@@ -958,6 +1007,7 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
     prompt = (
         "Explain the top 5 key observational trends about the data provided, "
         "from a Board of Directors' Perspective.\n\n"
+        "if financial data exists, please include time references and periods of which they incur as part of the analysis\n"
         "Requirements:\n"
         "1. Total Analysis Length: 1300 words\n"
         "2. For each trend, provide:\n"
@@ -975,6 +1025,7 @@ def analyze_why_this_happens(text: str) -> Dict[str, Any]:
     prompt = (
         "Based on the trends uncovered in the data provided, explain 5 reasons "
         "possible root causes and implications.\n\n"
+        "if financial data exists, please include time references and periods of which they incur as part of the analysis\n"
         "Requirements:\n"
         "1. Total Analysis Length: 1300 words\n"
         "2. For each root cause:\n"
@@ -992,6 +1043,7 @@ def analyze_what_could_happen(text: str) -> Dict[str, Any]:
     prompt = (
         "Based on the trends and consideration of the possible root causes from "
         "the data provided, explain possible scenarios.\n\n"
+        "if financial data exists, please include time references and periods of which they incur as part of the analysis\n"
         "Requirements:\n"
         "1. Scenario Analysis (1800 words total):\n"
         "   - Worst case scenario (600 words)\n"
@@ -1011,6 +1063,7 @@ def analyze_board_considerations(text: str) -> Dict[str, Any]:
     prompt = (
         "Based on the trends, diagnosis, outlook and from the data provided, "
         "explain possible scenarios.\n\n"
+        "if financial data exists, please include time references and periods of which they incur as part of the analysis\n"
         "Requirements:\n"
         "1. Total Analysis Length: 1300 words\n"
         "2. Analysis should cover:\n"
@@ -1062,7 +1115,7 @@ def main():
 
     # Configure OpenAI
     if not configure_openai():
-        st.warning("⚠️ Enter Secret key in sidebar to continue")
+        st.warning("⚠️ Enter User ID in sidebar to continue")
         return
 
     # Main content area
@@ -1070,45 +1123,48 @@ def main():
     
     with left_col:
         st.markdown('<div class="input-container">', unsafe_allow_html=True)
-        input_type = st.radio("Select input type:", ["PDF Document", "Text Input"], horizontal=True)
+        input_type = st.radio("Select input type:", ["PDF Document", "Text Input", "Image"], horizontal=True)
         
-        # Initialize doc_content in session state if not present
-        if 'doc_content' not in st.session_state:
-            st.session_state.doc_content = None
+        # Initialize content in session state
+        if 'processed_content' not in st.session_state:
+            st.session_state.processed_content = None
         
+        # Handle different input types
         if input_type == "PDF Document":
             uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
             if uploaded_file:
-                st.session_state.doc_content = read_pdf(uploaded_file)
+                st.session_state.processed_content = process_input_content(input_type, uploaded_file, "", st.session_state['client'])
+        elif input_type == "Image":
+            uploaded_file = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg'])
+            if uploaded_file:
+                st.session_state.processed_content = process_input_content(input_type, uploaded_file, "", st.session_state['client'])
         else:
-            # Create form for text input
             with st.form(key='text_input_form'):
                 text_input = st.text_area("Enter text for analysis", height=200)
                 submit_text = st.form_submit_button("Submit Text")
-                
                 if submit_text and text_input.strip():
-                    st.session_state.doc_content = text_input
+                    st.session_state.processed_content = process_input_content(input_type, None, text_input, st.session_state['client'])
         
         st.markdown('</div>', unsafe_allow_html=True)
 
     with right_col:
         st.markdown('<div class="button-container">', unsafe_allow_html=True)
-        if st.session_state.doc_content:
+        if st.session_state.processed_content:
             if st.button("What's happening?"):
-                st.session_state.results = []  # Clear previous results
-                analyze_whats_happening(st.session_state.doc_content)
+                st.session_state.results = []
+                analyze_whats_happening(st.session_state.processed_content)
             
             if st.button("Why this happens?"):
-                st.session_state.results = []  # Clear previous results
-                analyze_why_this_happens(st.session_state.doc_content)
+                st.session_state.results = []
+                analyze_why_this_happens(st.session_state.processed_content)
             
             if st.button("What could happen?"):
-                st.session_state.results = []  # Clear previous results
-                analyze_what_could_happen(st.session_state.doc_content)
+                st.session_state.results = []
+                analyze_what_could_happen(st.session_state.processed_content)
             
             if st.button("What should the Board consider?"):
-                st.session_state.results = []  # Clear previous results
-                analyze_board_considerations(st.session_state.doc_content)
+                st.session_state.results = []
+                analyze_board_considerations(st.session_state.processed_content)
         else:
             st.info("Please provide input and submit to enable analysis")
             
@@ -1119,26 +1175,10 @@ def main():
 
     # Add download functionality for all results
     if st.session_state.results:
-        st.sidebar.markdown("### 💾 Download Results")
-        
-        # Prepare download data
-        download_data = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "analyses": st.session_state.results
-        }
-        
-        # JSON download
-        json_data = json.dumps(download_data, indent=2)
-        b64_json = base64.b64encode(json_data.encode()).decode()
-        st.sidebar.download_button(
-            label="Download JSON",
-            file_name="boardlytics_analysis.json",
-            mime="application/json",
-            data=b64_json,
-        )
+        st.sidebar.markdown("### Menu")
         
         # Clear results button
-        if st.sidebar.button("Clear All Results"):
+        if st.sidebar.button("Click to return"):
             st.session_state.results = []
             st.experimental_rerun()
 
