@@ -1098,8 +1098,12 @@ def analyze_with_retry(text: str, analysis_type: str, prompt: str) -> Dict[str, 
 def analyze_whats_happening(text: str) -> Dict[str, Any]:
     """Analyze current trends from Board perspective."""
     prompt = (
-        "Explain the top 5 key observational trends about the data provided, "
-        "from a Board of Directors' Perspective.\n\n"
+        "You are a top global financial consultant  providing comprehensive financial  analysis based on the inputs provided. Provide a financial health analysis  and provide these answers.\n\n"
+        "1.What's the financial health of the company based on the available info. Support with key credit ratios with specific facts, figures from management perspectives. 800 words.\n"
+        "2. What are the key risks associated with this company in the short terms (<1 year), medium term (1-3 years) and long term implications, (>3 years). 800 words.\n"
+        "3.  Give a prediction with supporting facts and figures and time reference. 800 words.\n"
+        "4.What would be the recommended measures with specific reference to the facts, figures and time reference.\n"
+        "5. Provide advisory modules with suitable titles and abstracts in order for an advisory to assist. Must be specific to supporting facts, figures and time reference.\n"
         "if financial data exists, please include time references and periods of which they incur as part of the analysis\n"
         "Requirements:\n"
         "1. Total Analysis Length: 1300 words\n"
