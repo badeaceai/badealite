@@ -224,7 +224,7 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         
         # Add logo if available
         try:
-            logo_path = "badea.jpg"
+            logo_path = "badea.jpeg"
             if os.path.exists(logo_path):
                 img = Image(logo_path, width=220, height=40)
                 elements.append(img)
@@ -1199,9 +1199,9 @@ def main():
             <div style="margin-top: 20px;">
         """, unsafe_allow_html=True)
         try:
-            st.image("badea.jpg", width=800)
+            st.image("badea.jpeg", width=800)
         except:
-            st.warning("Please add badea.jpg to your project directory")
+            st.warning("Please add badea.jpeg to your project directory")
         st.markdown("""
             </div>
         """, unsafe_allow_html=True)
