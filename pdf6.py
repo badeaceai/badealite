@@ -232,17 +232,17 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         except:
             pass
         REPORT_TITLES = {
-            'whats_happening': 'Situational Analysis',
+            'whats_happening': 'Preliminary Financial & Business Insights',
             'what_could_happen': 'Scenario Insight Summary',
             'why_this_happens': 'Possible Causes',
             'what_should_board_consider': 'Strategic Implications & Board Recommendations',
             # Include variations without underscores and with spaces
-            'whats happening': 'Situational Analysis',
+            'whats happening': 'Preliminary Financial & Business Insights',
             'what could happen': 'Scenario Insight Summary',
             'why this happens': 'Possible Causes',
             'what should board consider': 'Strategic Implications & Board Recommendations',
             # Include variations without spaces
-            'whatshappening': 'Situational Analysis',
+            'whatshappening': 'Preliminary Financial & Business Insights',
             'whatcouldhappen': 'Scenario Insight Summary',
             'whythishappens': 'Possible Causes',
             'whatshouldboardconsider': 'Strategic Implications & Board Recommendations'
@@ -578,7 +578,7 @@ def display_results():
             
             # Get the appropriate title for the analysis type
             REPORT_TITLES = {
-                'whats_happening': 'Situational Analysis',
+                'whats_happening': 'Preliminary Financial & Business Insights',
                 'what_could_happen': 'Scenario Insight Summary',
                 'why_this_happens': 'Possible Causes',
                 'what_should_board_consider': 'Strategic Implications & Board Recommendations'
