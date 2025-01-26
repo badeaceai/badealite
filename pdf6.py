@@ -268,7 +268,7 @@ def create_styled_pdf_report(result: Dict[str, Any], analysis_type: str) -> byte
         # Then modify the title section to use this mapping
         title_text = REPORT_TITLES.get(analysis_type, f"Analysis Report: {analysis_type.replace('_', ' ').title()}")
         # Add title
-        # title_text = f"Board Analysis Report: {analysis_type.replace('_', ' ').title()}"
+        # title_text = f"Report: {analysis_type.replace('_', ' ').title()}"
         elements.append(Paragraph(title_text, styles['title']))
 
         # Add metadata
