@@ -1148,7 +1148,7 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
         "Abstract: This module provides a roadmap to achieving or maintaining an investment-grade credit rating by enhancing profitability, reducing leverage, and improving operational efficiency. The plan includes specific ratio targets, timelines, and resource requirements.\n"
         "Module 3: "Debt Management and Refinancing Strategies for Long-Term Stability\n"
         "Abstract: This module helps the company assess its current debt portfolio, identify refinancing opportunities, and develop a long-term strategy to manage interest obligations and maturities. It includes projections of debt servicing costs under various scenarios.\n"
-            )
+    )
     return analyze_with_retry(text, "whats_happening", prompt)
 
 def analyze_why_this_happens(text: str) -> Dict[str, Any]:
