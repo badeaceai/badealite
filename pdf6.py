@@ -1106,7 +1106,7 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
         "   - Solvency Ratios (Debt-to-Equity, Interest Coverage Ratio)\n"
         "   - Efficiency Ratios (Receivables Turnover, Inventory Turnover)\n"
         "Develop a credit rating assessment similar to S&P and Moody's by analyzing:\n"
-        "   - Business risk: Industry outlook, market positioning, revenue diversification, and operational efficiency.\n
+        "   - Business risk: Industry outlook, market positioning, revenue diversification, and operational efficiency.\n"
         "   - Financial risk: Leverage, profitability trends, liquidity, and cash flow adequacy.\n"
         "   - Assign an estimated credit rating (e.g., BBB, A, AA) with supporting rationale tied to these factors.\n"
         "Provide insights into the company’s capacity to meet its financial obligations, particularly focusing on its ability to maintain a favorable rating amid external and internal risks.\n"
