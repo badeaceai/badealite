@@ -1095,6 +1095,8 @@ def analyze_with_retry(text: str, analysis_type: str, prompt: str) -> Dict[str, 
     except Exception as e:
         st.error(f"Error during analysis: {str(e)}")
         return None
+from typing import Dict, Any
+
 def analyze_whats_happening(text: str) -> Dict[str, Any]:
     """Analyze current trends from Board perspective."""
     prompt = (
@@ -1111,7 +1113,7 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
         "   - Assign an estimated credit rating (e.g., BBB, A, AA) with supporting rationale tied to these factors.\n"
         "Provide insights into the company’s capacity to meet its financial obligations, particularly focusing on its ability to maintain a favorable rating amid external and internal risks.\n"
         "2. Working Capital Needs and Debt Repayment Capacity Analysis\n"
-        "Calculate and evaluate the company’s working capital requirements*, including:\n"
+        "Calculate and evaluate the company’s working capital requirements, including:\n"
         "   - Current working capital position (Current Assets – Current Liabilities).\n"
         "   - Projected working capital needs based on historical trends, revenue growth forecasts, and operational cycles.\n"
         "Assess the company’s capacity to service debt obligations, including:\n"
@@ -1121,9 +1123,9 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
         "Discuss the sufficiency of current liquidity to meet both operational and financial obligations, with an emphasis on strategies to optimize working capital and debt servicing efficiency.\n"
         "3. Key Risks Analysis Across Time Horizons 800 words.\n"
         "Identify and assess risks using financial, operational, and market data:\n"
-        "   - Short term (<1 year):* Risks like cash flow volatility, debt repayment pressures, and market disruptions.\n"
-        "   - Medium term (1–3 years):* Challenges such as refinancing risks, operational scalability, and changing competitive dynamics.\n"
-        "   - Long term (>3 years):* Strategic risks like technology disruption, regulatory shifts, and macroeconomic changes.\n"
+        "   - Short term (<1 year): Risks like cash flow volatility, debt repayment pressures, and market disruptions.\n"
+        "   - Medium term (1–3 years): Challenges such as refinancing risks, operational scalability, and changing competitive dynamics.\n"
+        "   - Long term (>3 years): Strategic risks like technology disruption, regulatory shifts, and macroeconomic changes.\n"
         "Provide a clear linkage between risks and the company’s financial health, credit rating, and capacity to meet future obligations.\n"
         "4. Financial Predictions with Supporting Data. 900 words.\n"
         "Forecast the company’s financial performance for the next three years, detailing:\n"
@@ -1132,7 +1134,7 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
         "   - Working capital and cash flow projections tied to debt repayment schedules.\n"
         "Use time-referenced insights to offer a clear rationale behind each prediction:\n"
         "   - Best-case, base-case, and worst-case scenarios, including their respective probabilities.\n"
-        "Provide actionable insights into how these predictions align with the company’s financial strategy and operational goals."
+        "Provide actionable insights into how these predictions align with the company’s financial strategy and operational goals.\n"
         "5. Recommended Measures (Action-Oriented and Time-Specific).\n"
         "Propose a comprehensive set of measures to:\n"
         "   - Enhance liquidity and optimize working capital (e.g., faster receivables collection, inventory management improvements).\n"
@@ -1142,14 +1144,15 @@ def analyze_whats_happening(text: str) -> Dict[str, Any]:
         "6. Advisory Modules with Titles and Abstracts.\n"
         "Develop detailed advisory modules tailored to the company’s needs, including titles and abstracts:\n"
         "Example Modules:\n"
-        "Module 1: "Optimizing Working Capital: A Path to Enhanced Liquidity\n"
+        "Module 1: \"Optimizing Working Capital: A Path to Enhanced Liquidity\"\n"
         "Abstract: This module focuses on optimizing cash flows through efficient receivables, payables, and inventory management. It includes a step-by-step approach to reducing working capital needs by 10–15% within one year, improving liquidity and supporting debt repayment capacity.\n"
-        "Module 2: "Achieving Investment-Grade Credit Ratings: A Strategic Blueprint\n"
+        "Module 2: \"Achieving Investment-Grade Credit Ratings: A Strategic Blueprint\"\n"
         "Abstract: This module provides a roadmap to achieving or maintaining an investment-grade credit rating by enhancing profitability, reducing leverage, and improving operational efficiency. The plan includes specific ratio targets, timelines, and resource requirements.\n"
-        "Module 3: "Debt Management and Refinancing Strategies for Long-Term Stability\n"
-        "Abstract: This module helps the company assess its current debt portfolio, identify refinancing opportunities, and develop a long-term strategy to manage interest obligations and maturities. It includes projections of debt servicing costs under various scenarios."
+        "Module 3: \"Debt Management and Refinancing Strategies for Long-Term Stability\"\n"
+        "Abstract: This module helps the company assess its current debt portfolio, identify refinancing opportunities, and develop a long-term strategy to manage interest obligations and maturities. It includes projections of debt servicing costs under various scenarios.\n"
     )
     return analyze_with_retry(text, "whats_happening", prompt)
+
 
 def analyze_why_this_happens(text: str) -> Dict[str, Any]:
     """Analyze root causes based on trends."""
