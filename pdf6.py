@@ -1228,7 +1228,7 @@ def main():
                             display: inline-block;
                             margin-left: -10px;'>
                     <h1 style='margin:0; font-size: 2.2rem; color: white; font-weight: 700;'>
-                        Badea Board Foresight
+                        Board Foresight
                     </h1>
                 </div>
             </div>
